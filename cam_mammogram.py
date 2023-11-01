@@ -1,5 +1,7 @@
 #CAM MAMMOGRAM
 from tensorflow.keras.applications.resnet_v2 import ResNet152V2
+from tensorflow.keras.layers import Input, GlobalAveragePooling2D, Dense
+from tensorflow.keras.models import Model
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization
 import tensorflow as tf
 from keras.models import Sequential
@@ -11,8 +13,8 @@ import cv2
 from pandas import read_csv
 # from sklearn.feature_extraction.image import PatchExtractor
 from patchify import patchify
-
-
+# from np_utils import to_categorical
+from sklearn.model_selection import train_test_split
 """
 BIRADS Categories
 
@@ -33,6 +35,7 @@ Category 6: Known biopsy-proven malignancy - The cancer has already been confirm
 
 GLOBAL_X = 250
 GLOBAL_Y = 250
+PATCH_SIZE = (GLOBAL_X, GLOBAL_Y)
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
     df = read_csv(os.path.join(path,"breast-level_annotations.csv"))
@@ -153,21 +156,56 @@ def clahe(image):
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
-def resNet152_baseline():
-    optimizer = tf.keras.optimizers.Nadam(learning_rate=0.001, beta_1=0.9,beta_2=0.999)
+def create_patch_model(input_shape):
+    base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=input_shape)
+    x = GlobalAveragePooling2D()(base_model.output)
+    x = Dense(128, activation='relu')(x)
+    outputs = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
 
-    base_model = ResNet152V2(include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
-    for layer in base_model.layers:
-        layer.trainable = False
-    model = Sequential()
-    model.add(base_model)
-    model.add(Flatten())
-    model.add(Dense(3, activation="softmax"))
-    model.compile(optimizer=optimizer, loss="categorical_crossentropy", metrics="accuracy")
-    return model
+    patch_model = Model(inputs=base_model.input, outputs=outputs)
+    return patch_model
+
+def create_global_model(num_rows,num_columns):
+    # Input shape for each patch (1 channel for grayscale)
+    patch_input_shape = (*PATCH_SIZE, 1)
+
+    # Create a list of patch models
+    patch_models = [create_patch_model(patch_input_shape) for _ in range(num_rows * num_columns)]
+
+    # Input shape for the global model
+    global_input_shape = (num_rows, num_columns, *patch_input_shape)
+
+    # Create a global model that takes a grid of patches as input
+    global_input = Input(shape=global_input_shape)
+    patch_inputs = tf.split(global_input, num_rows * num_columns, axis=(0, 1))
+
+    outputs = [patch_models[i](patch_inputs[i]) for i in range(num_rows * num_columns)]
+
+    # Flatten the patch results and classify globally
+    x = tf.concat(outputs, axis=1)
+    global_output = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
+
+    global_model = Model(inputs=global_input, outputs=global_output)
+    global_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+    return global_model
+
+# def resNet152_baseline():
+#     optimizer = tf.keras.optimizers.Nadam(learning_rate=0.001, beta_1=0.9,beta_2=0.999)
+
+#     base_model = ResNet152V2(include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+#     for layer in base_model.layers:
+#         layer.trainable = False
+#     model = Sequential()
+#     model.add(base_model)
+#     model.add(Flatten())
+#     model.add(Dense(3, activation="softmax"))
+#     model.compile(optimizer=optimizer, loss="categorical_crossentropy", metrics="accuracy")
+#     return model
 
 def patch(image):
     patches=patchify(image,(GLOBAL_X,GLOBAL_Y),step=GLOBAL_X)
+    # print(np.shape(patches))
     return patches
     # shape_patches = np.shape(patches)
     # plt.figure(figsize=(6, 6))
@@ -186,31 +224,55 @@ def patch(image):
     # pe = PatchExtractor(patch_size=(GLOBAL_X, GLOBAL_Y))
     # patches = pe.transform(image)
     # print(patches)
-    # print(np.shape(patches))
+    
     # input()
 def main():
     # all_dir = load_images()
     glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
     df = read_df()
     dict_save_benign = {}
-    dict_image_benign= {}
+    # dict_image_benign= {}
     dict_save_malig = {}
-    dict_image_malig = {}
+    # dict_image_malig = {}
+    dict_image_malig, dict_image_benign = [], []
+    label_benign, label_malignant = [], []
     for iteration, (index, row) in enumerate(df.iterrows()):
         image_type = row['image_id'] + '.dicom'
         dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
         if os.path.exists(dicom_path):
             png_file = convert_dicom_to_png(dicom_path)
-            clahe_image = clahe(png_file)
-            #BENIGN
-            if row['breast_birads'] > 1 and row['breast_birads'] < 4:
-                dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
-                dict_image_benign[index] = patch(clahe_image)
-            #MALIGNANT
-            elif row['breast_birads'] > 3:
-                dict_save_malig[index] = [row['view_position'],row['breast_birads']]
-                dict_image_malig[index] = patch(clahe_image)
-                print(dict_save_malig)
+            if png_file is not None:
+                #BENIGN
+                if row['breast_birads'] > 1 and row['breast_birads'] < 4:
+                    clahe_image = clahe(png_file)
+                    dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
+                    # dict_image_benign[index] = patch(clahe_image)
+                    dict_image_benign.append(patch(clahe_image))
+                    label_benign.append(0)
+                    print(f'length of benign features: {len(dict_image_benign)}')
+                    print(f'length of benign labels: {len(label_benign)}')
+                #MALIGNANT
+                elif row['breast_birads'] > 3:
+                    clahe_image = clahe(png_file)
+                    dict_save_malig[index] = [row['view_position'],row['breast_birads']]
+                    dict_image_malig.append(patch(clahe_image))
+                    # dict_image_malig[index] = patch(clahe_image)
+                    label_malignant.append(1)
+                    print(f'length of malignant features: {len(dict_image_malig)}')
+                    print(f'length of malignant labels: {len(label_malignant)}')
+                    # print(np.shape(dict_image_malig)
+    #train-valid split
+    feature_data = dict_image_benign + dict_image_malig
+    label_benign = np.array(label_benign, dtype='int32')
+    label_malignant = np.array(label_malignant, dtype='int32')
+    labels = np.concatenate((label_benign, label_malignant))
+    labels = tf.keras.utils.to_categorical(labels,2)
+    X_train, X_test, y_train, y_test = train_test_split(feature_data, labels, test_size=0.2, random_state=42)
+    print(f'x_train size {np.shape(X_train)}')
+    print(f'X_test size {np.shape(X_test)}')
+    print(f'y_train size {np.shape(y_train)}')
+    print(f'y_test size {np.shape(y_test)}')
+
 
     # for sub_dir in all_dir:
     #     dicom_files = [os.path.join(sub_dir, filename) for filename in os.listdir(sub_dir) if filename.lower().endswith('.dicom')]
