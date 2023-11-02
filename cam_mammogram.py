@@ -1,6 +1,6 @@
 #CAM MAMMOGRAM
 from tensorflow.keras.applications.resnet_v2 import ResNet152V2
-from tensorflow.keras.layers import Input, GlobalAveragePooling2D, Dense
+from tensorflow.keras.layers import Input, GlobalAveragePooling2D, Dense, Concatenate
 from tensorflow.keras.models import Model
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization
 import tensorflow as tf
@@ -15,6 +15,8 @@ from pandas import read_csv
 from patchify import patchify
 # from np_utils import to_categorical
 from sklearn.model_selection import train_test_split
+from statistics import mode
+import pickle
 """
 BIRADS Categories
 
@@ -157,12 +159,19 @@ def clahe(image):
     # cv2.destroyAllWindows()
 
 def create_patch_model(input_shape):
-    base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=input_shape)
+    input_layer = Input(shape=input_shape)
+    rgb_input = Concatenate()([input_layer, input_layer, input_layer])
+    base_model = ResNet152V2(include_top=False, weights='imagenet', input_tensor=rgb_input)
     x = GlobalAveragePooling2D()(base_model.output)
     x = Dense(128, activation='relu')(x)
-    outputs = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
+    outputs = Dense(2, activation='softmax')(x)
+    patch_model = Model(inputs=input_layer, outputs=outputs)
+    # base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=input_shape)
+    # x = GlobalAveragePooling2D()(base_model.output)
+    # x = Dense(128, activation='relu')(x)
+    # outputs = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
 
-    patch_model = Model(inputs=base_model.input, outputs=outputs)
+    # patch_model = Model(inputs=base_model.input, outputs=outputs)
     return patch_model
 
 def create_global_model(num_rows,num_columns):
@@ -206,6 +215,7 @@ def create_global_model(num_rows,num_columns):
 def patch(image):
     patches=patchify(image,(GLOBAL_X,GLOBAL_Y),step=GLOBAL_X)
     # print(np.shape(patches))
+    # print(np.shape(patches))
     return patches
     # shape_patches = np.shape(patches)
     # plt.figure(figsize=(6, 6))
@@ -236,43 +246,61 @@ def main():
     # dict_image_malig = {}
     dict_image_malig, dict_image_benign = [], []
     label_benign, label_malignant = [], []
-    for iteration, (index, row) in enumerate(df.iterrows()):
-        image_type = row['image_id'] + '.dicom'
-        dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
-        if os.path.exists(dicom_path):
-            png_file = convert_dicom_to_png(dicom_path)
-            if png_file is not None:
-                #BENIGN
-                if row['breast_birads'] > 1 and row['breast_birads'] < 4:
-                    clahe_image = clahe(png_file)
-                    dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
-                    # dict_image_benign[index] = patch(clahe_image)
-                    dict_image_benign.append(patch(clahe_image))
-                    label_benign.append(0)
-                    print(f'length of benign features: {len(dict_image_benign)}')
-                    print(f'length of benign labels: {len(label_benign)}')
-                #MALIGNANT
-                elif row['breast_birads'] > 3:
-                    clahe_image = clahe(png_file)
-                    dict_save_malig[index] = [row['view_position'],row['breast_birads']]
-                    dict_image_malig.append(patch(clahe_image))
-                    # dict_image_malig[index] = patch(clahe_image)
-                    label_malignant.append(1)
-                    print(f'length of malignant features: {len(dict_image_malig)}')
-                    print(f'length of malignant labels: {len(label_malignant)}')
-                    # print(np.shape(dict_image_malig)
-    #train-valid split
-    feature_data = dict_image_benign + dict_image_malig
-    label_benign = np.array(label_benign, dtype='int32')
-    label_malignant = np.array(label_malignant, dtype='int32')
-    labels = np.concatenate((label_benign, label_malignant))
-    labels = tf.keras.utils.to_categorical(labels,2)
-    X_train, X_test, y_train, y_test = train_test_split(feature_data, labels, test_size=0.2, random_state=42)
+    row_list, col_list = [], []
+    if not os.path.exists('data.pkl'):
+        for iteration, (index, row) in enumerate(df.iterrows()):
+            image_type = row['image_id'] + '.dicom'
+            dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
+            if os.path.exists(dicom_path):
+                png_file = convert_dicom_to_png(dicom_path)
+                if png_file is not None:
+                    #BENIGN
+                    if row['breast_birads'] > 1 and row['breast_birads'] < 4:
+                        clahe_image = clahe(png_file)
+                        dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
+                        # dict_image_benign[index] = patch(clahe_image)
+                        image_patch = patch(clahe_image)
+                        row_list.append(np.shape(image_patch)[0])
+                        col_list.append(np.shape(image_patch)[1])
+                        dict_image_benign.append(image_patch)
+                        label_benign.append(0)
+                        # print(f'length of benign features: {len(dict_image_benign)}')
+                        # print(f'length of benign labels: {len(label_benign)}')
+                    #MALIGNANT
+                    elif row['breast_birads'] > 3:
+                        clahe_image = clahe(png_file)
+                        dict_save_malig[index] = [row['view_position'],row['breast_birads']]
+                        image_patch = patch(clahe_image)
+                        np.shape(image_patch)[0]
+                        row_list.append(np.shape(image_patch)[0])
+                        col_list.append(np.shape(image_patch)[1])
+                        dict_image_malig.append(image_patch)
+                        # dict_image_malig[index] = patch(clahe_image)
+                        label_malignant.append(1)
+                        # print(f'length of malignant features: {len(dict_image_malig)}')
+                        # print(f'length of malignant labels: {len(label_malignant)}')
+                        # print(np.shape(dict_image_malig)
+        #train-valid split
+        feature_data = dict_image_benign + dict_image_malig
+        label_benign = np.array(label_benign, dtype='int32')
+        label_malignant = np.array(label_malignant, dtype='int32')
+        labels = np.concatenate((label_benign, label_malignant))
+        labels = tf.keras.utils.to_categorical(labels,2)
+        X_train, X_test, y_train, y_test = train_test_split(feature_data, labels, test_size=0.2, random_state=42)
+        with open('data.pkl', 'wb') as file:
+            pickle.dump((X_train, X_test, y_train, y_test), file)
+    else:
+        with open('data.pkl', 'rb') as file:
+            X_train, X_test, y_train, y_test = pickle.load(file)
     print(f'x_train size {np.shape(X_train)}')
     print(f'X_test size {np.shape(X_test)}')
     print(f'y_train size {np.shape(y_train)}')
     print(f'y_test size {np.shape(y_test)}')
 
+    #train model
+    global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
+    history = global_model.fit(X_train, y_train, epochs=100, batch_size=64,
+                                    validation_data=(X_test, y_test), verbose=1)
 
     # for sub_dir in all_dir:
     #     dicom_files = [os.path.join(sub_dir, filename) for filename in os.listdir(sub_dir) if filename.lower().endswith('.dicom')]
