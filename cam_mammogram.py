@@ -17,6 +17,7 @@ from patchify import patchify
 from sklearn.model_selection import train_test_split
 from statistics import mode
 import pickle
+from skimage.util import view_as_windows
 """
 BIRADS Categories
 
@@ -40,10 +41,10 @@ GLOBAL_Y = 250
 PATCH_SIZE = (GLOBAL_X, GLOBAL_Y)
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
-    df = read_csv(os.path.join(path,"breast-level_annotations.csv"))
+    df = read_csv(os.path.join(path,"finding_annotations.csv"))
     df['breast_birads'] = df['breast_birads'].str.replace('BI-RADS ', '')
     df['breast_birads'] = df['breast_birads'].astype(int)
-    return df[['study_id', 'image_id','view_position','breast_birads']]
+    return df[['study_id', 'image_id','view_position','breast_birads','xmin','xmax','ymin','ymax']]
 
 def convert_dicom_to_png(dicom_file: str) -> np.ndarray:
     """
@@ -159,11 +160,14 @@ def clahe(image):
     # cv2.destroyAllWindows()
 
 def create_patch_model(input_shape):
+    """
+    input shape = (250,250,3,12)
+    """
     input_layer = Input(shape=input_shape)
     rgb_input = Concatenate()([input_layer, input_layer, input_layer])
-    base_model = ResNet152V2(include_top=False, weights='imagenet', input_tensor=rgb_input)
+    base_model = ResNet152V2(include_top=False, input_tensor=rgb_input)
     x = GlobalAveragePooling2D()(base_model.output)
-    x = Dense(128, activation='relu')(x)
+    # x = Dense(128, activation='relu')(x)
     outputs = Dense(2, activation='softmax')(x)
     patch_model = Model(inputs=input_layer, outputs=outputs)
     # base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=input_shape)
@@ -212,23 +216,115 @@ def create_global_model(num_rows,num_columns):
 #     model.compile(optimizer=optimizer, loss="categorical_crossentropy", metrics="accuracy")
 #     return model
 
-def patch(image):
-    patches=patchify(image,(GLOBAL_X,GLOBAL_Y),step=GLOBAL_X)
-    # print(np.shape(patches))
-    # print(np.shape(patches))
+def patch(image,list_mass):
+    """
+    Upper left corner 0,0 pixel in python
+    """
+    step_x = max(GLOBAL_X, GLOBAL_Y)
+    step_y = max(GLOBAL_X, GLOBAL_Y)
+
+    # Extract non-overlapping patches
+    patches = view_as_windows(image, (GLOBAL_Y, GLOBAL_X), step=(step_y, step_x))
+    # patches=patchify(image,(GLOBAL_X,GLOBAL_Y),step=GLOBAL_X)
+    list_mass = [int(x) for x in list_mass]
+    xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
+    shape_patches = np.shape(patches)
+    # black_images, tissue_images, lesion_images  = {}, {}, {}
+    all_images = {}
+    x_pix_curr, y_pix_curr = 0,0
+# [2355, 2482, 1731, 1852]
+
+    for i in range(shape_patches[0]): #iterates over y
+        y_pix_curr = i * step_y
+        x_pix_curr = 0
+        for j in range(shape_patches[1]): #iterates over x
+            x_pix_curr = j * step_x
+
+            patch_xmin = x_pix_curr
+            patch_xmax = patch_xmin + GLOBAL_X
+            patch_ymin = y_pix_curr
+            patch_ymax = patch_ymin + GLOBAL_Y
+            sample_patch = patches[i, j, :, :]
+
+            #black images
+            if np.all(sample_patch < 40):
+                all_images[i,j] = [sample_patch,0]
+            #lesion images
+            elif (((patch_xmin <= xmin <= patch_xmax) and 
+                  (patch_ymin <= ymin <= patch_ymax)) or 
+                  ((patch_xmin <= xmin <= patch_xmax) and 
+                  (patch_ymin <= ymax <= patch_ymax)) or 
+                  ((patch_xmin <= xmax <= patch_xmax) and 
+                  (patch_ymin <= ymin <= patch_ymax)) or 
+                  ((patch_xmin <= xmax <= patch_xmax) and 
+                  (patch_ymin <= ymax <= patch_ymax)) or 
+
+
+
+                  ((patch_xmin <= xmin <= patch_xmax) and 
+                   (ymin <= y_pix_curr <= ymax)) or 
+                  ((patch_xmin <= xmax <= patch_xmax) and 
+                   (ymin <= y_pix_curr <= ymax))
+                  ): #patch_xmin >= xmin and patch_xmax <= xmax and patch_ymin >= ymin and patch_ymax <= ymax
+                all_images[i,j] = [sample_patch,1]
+            #tissue images
+            else:
+                all_images[i,j] = [sample_patch,2]
+            # print([x_pix_curr, y_pix_curr])
+            # input()
+    print(list_mass)
+    
+    label_colors = {0: 'green', 1: 'red', 2: 'blue'} # 0 = black, 1 = lesion, 2 = tissue
+    border_thickness = 2
+    num_rows = shape_patches[0]
+    num_cols = shape_patches[1]
+    plt.figure(figsize=(7, 7))
+    ix = 1
+    for i in range(shape_patches[0]): #iterates over y
+        for j in range(shape_patches[1]): #iterates over x
+            # Get the image and label for the current position
+            sample_patch, label = all_images[i, j]
+
+            patch_ymin = i * step_x
+            patch_ymax = patch_ymin + GLOBAL_Y
+            patch_xmin = j * step_x
+            patch_xmax = patch_xmin + GLOBAL_X
+
+            # Specify subplot and turn off axis
+            ax = plt.subplot(num_rows, num_cols, ix)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            # Plot the image with the colored border
+            plt.imshow(sample_patch, cmap='gray')
+            ax.spines['top'].set_color('none')
+            ax.spines['bottom'].set_color('none')
+            ax.spines['left'].set_color('none')
+            ax.spines['right'].set_color('none')
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            # Add the colored border based on the label
+            ax.spines['top'].set_color(label_colors[label])
+            ax.spines['bottom'].set_color(label_colors[label])
+            ax.spines['left'].set_color(label_colors[label])
+            ax.spines['right'].set_color(label_colors[label])
+
+            # Increase the border thickness
+            ax.spines['top'].set_linewidth(border_thickness)
+            ax.spines['bottom'].set_linewidth(border_thickness)
+            ax.spines['left'].set_linewidth(border_thickness)
+            ax.spines['right'].set_linewidth(border_thickness)
+            title_text = f"{patch_xmin},{patch_xmax}\n" \
+                     f"{patch_ymin},{patch_ymax}"
+            # ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
+            # plt.title(title_text,fontsize=10)
+
+            ix += 1
+    # plt.legend(['black','lesion','tissue'])
+    plt.savefig('labeled_patches.png',dpi=450)
+    plt.show()
     return patches
-    # shape_patches = np.shape(patches)
-    # plt.figure(figsize=(6, 6))
-    # ix = 1
-    # for i in range(shape_patches[0]):
-    #     for j in range(shape_patches[1]):
-    #         # specify subplot and turn of axis
-    #         ax = plt.subplot(shape_patches[0], shape_patches[1], ix)
-    #         ax.set_xticks([])
-    #         ax.set_yticks([])
-    #         # plot 
-    #         plt.imshow(patches[i, j, :, :], cmap='gray')
-    #         ix += 1
     # plt.savefig('patch_example.png',dpi=450)
     # plt.show()
     # pe = PatchExtractor(patch_size=(GLOBAL_X, GLOBAL_Y))
@@ -240,6 +336,7 @@ def main():
     # all_dir = load_images()
     glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
     df = read_df()
+    df.dropna(inplace=True)
     dict_save_benign = {}
     # dict_image_benign= {}
     dict_save_malig = {}
@@ -259,7 +356,7 @@ def main():
                         clahe_image = clahe(png_file)
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
-                        image_patch = patch(clahe_image)
+                        image_patch = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
                         row_list.append(np.shape(image_patch)[0])
                         col_list.append(np.shape(image_patch)[1])
                         dict_image_benign.append(image_patch)
@@ -270,8 +367,7 @@ def main():
                     elif row['breast_birads'] > 3:
                         clahe_image = clahe(png_file)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
-                        image_patch = patch(clahe_image)
-                        np.shape(image_patch)[0]
+                        image_patch = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
                         row_list.append(np.shape(image_patch)[0])
                         col_list.append(np.shape(image_patch)[1])
                         dict_image_malig.append(image_patch)
@@ -299,7 +395,7 @@ def main():
 
     #train model
     global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
-    history = global_model.fit(X_train, y_train, epochs=100, batch_size=64,
+    history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
                                     validation_data=(X_test, y_test), verbose=1)
 
     # for sub_dir in all_dir:
