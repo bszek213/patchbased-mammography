@@ -18,6 +18,8 @@ from sklearn.model_selection import train_test_split
 from statistics import mode
 import pickle
 from skimage.util import view_as_windows
+# from pandas import DataFrame
+# from itertools import chain
 """
 BIRADS Categories
 
@@ -272,59 +274,62 @@ def patch(image,list_mass):
                 all_images[i,j] = [sample_patch,2]
             # print([x_pix_curr, y_pix_curr])
             # input()
-    print(list_mass)
+    # print(list_mass)
     
     label_colors = {0: 'green', 1: 'red', 2: 'blue'} # 0 = black, 1 = lesion, 2 = tissue
     border_thickness = 2
     num_rows = shape_patches[0]
     num_cols = shape_patches[1]
-    plt.figure(figsize=(7, 7))
-    ix = 1
-    for i in range(shape_patches[0]): #iterates over y
-        for j in range(shape_patches[1]): #iterates over x
-            # Get the image and label for the current position
-            sample_patch, label = all_images[i, j]
+    # plt.figure(figsize=(7, 7))
+    # ix = 1
+    # for i in range(shape_patches[0]): #iterates over y
+    #     for j in range(shape_patches[1]): #iterates over x
+    #         # Get the image and label for the current position
+    #         sample_patch, label = all_images[i, j]
 
-            patch_ymin = i * step_x
-            patch_ymax = patch_ymin + GLOBAL_Y
-            patch_xmin = j * step_x
-            patch_xmax = patch_xmin + GLOBAL_X
+    #         patch_ymin = i * step_x
+    #         patch_ymax = patch_ymin + GLOBAL_Y
+    #         patch_xmin = j * step_x
+    #         patch_xmax = patch_xmin + GLOBAL_X
 
-            # Specify subplot and turn off axis
-            ax = plt.subplot(num_rows, num_cols, ix)
-            ax.set_xticks([])
-            ax.set_yticks([])
+    #         # Specify subplot and turn off axis
+    #         ax = plt.subplot(num_rows, num_cols, ix)
+    #         ax.set_xticks([])
+    #         ax.set_yticks([])
 
-            # Plot the image with the colored border
-            plt.imshow(sample_patch, cmap='gray')
-            ax.spines['top'].set_color('none')
-            ax.spines['bottom'].set_color('none')
-            ax.spines['left'].set_color('none')
-            ax.spines['right'].set_color('none')
-            ax.set_xticks([])
-            ax.set_yticks([])
+    #         # Plot the image with the colored border
+    #         plt.imshow(sample_patch, cmap='gray')
+    #         ax.spines['top'].set_color('none')
+    #         ax.spines['bottom'].set_color('none')
+    #         ax.spines['left'].set_color('none')
+    #         ax.spines['right'].set_color('none')
+    #         ax.set_xticks([])
+    #         ax.set_yticks([])
 
-            # Add the colored border based on the label
-            ax.spines['top'].set_color(label_colors[label])
-            ax.spines['bottom'].set_color(label_colors[label])
-            ax.spines['left'].set_color(label_colors[label])
-            ax.spines['right'].set_color(label_colors[label])
+    #         # Add the colored border based on the label
+    #         ax.spines['top'].set_color(label_colors[label])
+    #         ax.spines['bottom'].set_color(label_colors[label])
+    #         ax.spines['left'].set_color(label_colors[label])
+    #         ax.spines['right'].set_color(label_colors[label])
 
-            # Increase the border thickness
-            ax.spines['top'].set_linewidth(border_thickness)
-            ax.spines['bottom'].set_linewidth(border_thickness)
-            ax.spines['left'].set_linewidth(border_thickness)
-            ax.spines['right'].set_linewidth(border_thickness)
-            title_text = f"{patch_xmin},{patch_xmax}\n" \
-                     f"{patch_ymin},{patch_ymax}"
-            # ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
-            # plt.title(title_text,fontsize=10)
+    #         # Increase the border thickness
+    #         ax.spines['top'].set_linewidth(border_thickness)
+    #         ax.spines['bottom'].set_linewidth(border_thickness)
+    #         ax.spines['left'].set_linewidth(border_thickness)
+    #         ax.spines['right'].set_linewidth(border_thickness)
+    #         title_text = f"{patch_xmin},{patch_xmax}\n" \
+    #                  f"{patch_ymin},{patch_ymax}"
+    #         # ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
+    #         # plt.title(title_text,fontsize=10)
 
-            ix += 1
-    # plt.legend(['black','lesion','tissue'])
-    plt.savefig('labeled_patches.png',dpi=450)
-    plt.show()
-    return patches
+    #         ix += 1
+    # plt.savefig('labeled_patches.png',dpi=450)
+    # plt.show()
+    feature_list, label_list = [], []
+    for _, (matrix, integer) in all_images.items():
+        feature_list.append(matrix)
+        label_list.append(int(integer))
+    return feature_list, label_list
     # plt.savefig('patch_example.png',dpi=450)
     # plt.show()
     # pe = PatchExtractor(patch_size=(GLOBAL_X, GLOBAL_Y))
@@ -332,6 +337,34 @@ def patch(image,list_mass):
     # print(patches)
     
     # input()
+def display_image(image):
+    from PIL import Image
+    # Downsample the image to 300x300
+    # Convert the NumPy array to a Pillow image
+    original_image = Image.fromarray(image, mode='L')  # 'L' mode represents grayscale
+
+    # Downsample the image to 300x300
+    downsampled_image = original_image.resize((300, 300), Image.ANTIALIAS)
+
+    # Create a Matplotlib figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+
+    # Display the original image in the first subplot
+    ax1.imshow(image, cmap='gray')
+    ax1.set_title('Original Image')
+
+    # Display the downsampled image in the second subplot
+    ax2.imshow(np.array(downsampled_image), cmap='gray')
+    ax2.set_title('Downsampled Image')
+
+    # Hide axis labels
+    ax1.axis('off')
+    ax2.axis('off')
+
+    # Show the Matplotlib figure
+    plt.savefig('downsampleVsOG.png',dpi=400)
+    plt.close()
+
 def main():
     # all_dir = load_images()
     glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
@@ -344,10 +377,12 @@ def main():
     dict_image_malig, dict_image_benign = [], []
     label_benign, label_malignant = [], []
     row_list, col_list = [], []
+    list_features_total, list_labels_total = [], []
     if not os.path.exists('data.pkl'):
         for iteration, (index, row) in enumerate(df.iterrows()):
             image_type = row['image_id'] + '.dicom'
             dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
+            list_of_dicts = []
             if os.path.exists(dicom_path):
                 png_file = convert_dicom_to_png(dicom_path)
                 if png_file is not None:
@@ -356,47 +391,59 @@ def main():
                         clahe_image = clahe(png_file)
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
-                        image_patch = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        row_list.append(np.shape(image_patch)[0])
-                        col_list.append(np.shape(image_patch)[1])
-                        dict_image_benign.append(image_patch)
-                        label_benign.append(0)
+                        features_list, labels_list = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                        list_features_total.append(features_list)
+                        list_labels_total.append(labels_list)
+                        print(np.shape(list_features_total))
+                        print(np.shape(list_labels_total))
+                        # row_list.append(np.shape(image_patch)[0])
+                        # col_list.append(np.shape(image_patch)[1])
+                        # dict_image_benign.append(image_patch)
+                        # label_benign.append(0)
                         # print(f'length of benign features: {len(dict_image_benign)}')
                         # print(f'length of benign labels: {len(label_benign)}')
                     #MALIGNANT
                     elif row['breast_birads'] > 3:
                         clahe_image = clahe(png_file)
+                        # display_image(clahe_image)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
-                        image_patch = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        row_list.append(np.shape(image_patch)[0])
-                        col_list.append(np.shape(image_patch)[1])
-                        dict_image_malig.append(image_patch)
-                        # dict_image_malig[index] = patch(clahe_image)
-                        label_malignant.append(1)
+                        features_list, labels_list = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                        list_features_total.append(features_list)
+                        list_labels_total.append(labels_list)
+                        print(np.shape(list_features_total))
+                        print(np.shape(list_labels_total))
+                        # row_list.append(np.shape(image_patch)[0])
+                        # col_list.append(np.shape(image_patch)[1])
+                        # dict_image_malig.append(image_patch)
+                        # label_malignant.append(1)
                         # print(f'length of malignant features: {len(dict_image_malig)}')
                         # print(f'length of malignant labels: {len(label_malignant)}')
                         # print(np.shape(dict_image_malig)
+
         #train-valid split
-        feature_data = dict_image_benign + dict_image_malig
-        label_benign = np.array(label_benign, dtype='int32')
-        label_malignant = np.array(label_malignant, dtype='int32')
-        labels = np.concatenate((label_benign, label_malignant))
-        labels = tf.keras.utils.to_categorical(labels,2)
-        X_train, X_test, y_train, y_test = train_test_split(feature_data, labels, test_size=0.2, random_state=42)
+    #     feature_data = dict_image_benign + dict_image_malig
+    #     label_benign = np.array(label_benign, dtype='int32')
+    #     label_malignant = np.array(label_malignant, dtype='int32')
+    #     labels = np.concatenate((label_benign, label_malignant))
+        labels = tf.keras.utils.to_categorical(np.array([item for sublist in list_labels_total for item in sublist], dtype="int"), 3)
+        features = np.vstack(list_features_total)
+        print(features.shape)
+        X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
         with open('data.pkl', 'wb') as file:
             pickle.dump((X_train, X_test, y_train, y_test), file)
     else:
         with open('data.pkl', 'rb') as file:
+            print(pickle.load(file))
             X_train, X_test, y_train, y_test = pickle.load(file)
     print(f'x_train size {np.shape(X_train)}')
     print(f'X_test size {np.shape(X_test)}')
     print(f'y_train size {np.shape(y_train)}')
     print(f'y_test size {np.shape(y_test)}')
 
-    #train model
-    global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
-    history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
-                                    validation_data=(X_test, y_test), verbose=1)
+    # #train model
+    # global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
+    # history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
+    #                                 validation_data=(X_test, y_test), verbose=1)
 
     # for sub_dir in all_dir:
     #     dicom_files = [os.path.join(sub_dir, filename) for filename in os.listdir(sub_dir) if filename.lower().endswith('.dicom')]
