@@ -250,8 +250,8 @@ def patch(image,list_mass):
     # black_images, tissue_images, lesion_images  = {}, {}, {}
     all_images = {}
     x_pix_curr, y_pix_curr = 0,0
-# [2355, 2482, 1731, 1852]
-
+    # print(list_mass)
+    #FIND NONLESIONED SUBIMAGES
     for i in range(shape_patches[0]): #iterates over y
         y_pix_curr = i * step_y
         x_pix_curr = 0
@@ -296,8 +296,6 @@ def patch(image,list_mass):
                   ((patch_xmin <= xmax <= patch_xmax) and 
                   (patch_ymin <= ymax <= patch_ymax)) or 
 
-
-
                   ((patch_xmin <= xmin <= patch_xmax) and 
                    (ymin <= y_pix_curr <= ymax)) or 
                   ((patch_xmin <= xmax <= patch_xmax) and 
@@ -310,66 +308,136 @@ def patch(image,list_mass):
 
 
                   ): #patch_xmin >= xmin and patch_xmax <= xmax and patch_ymin >= ymin and patch_ymax <= ymax
-                all_images[i,j] = [sample_patch,1]
+                continue
+                # all_images[i,j] = [sample_patch,1]
             #tissue images
             else:
                 all_images[i,j] = [sample_patch,2]
-    print(list_mass)
+    #FIND THE SUBIMAGES OF THE LESIONS
+    center_x = (list_mass[0] + list_mass[1]) // 2
+    center_y = (list_mass[2] + list_mass[3]) // 2
+    if (list_mass[1] - list_mass[2] < GLOBAL_X) or (list_mass[3] - list_mass[2] < GLOBAL_Y):
+        subimage_xmin = max(center_x - GLOBAL_X // 2, 0)
+        subimage_xmax = min(center_x + GLOBAL_X // 2, image.shape[1])
+        subimage_ymin = max(center_y - GLOBAL_Y // 2, 0)
+        subimage_ymax = min(center_y + GLOBAL_Y // 2, image.shape[0])
+    else:
+        subimage_xmin = list_mass[0]
+        subimage_xmax = list_mass[1]
+        subimage_ymin = list_mass[2]
+        subimage_ymax = list_mass[3]
+
+    subimage = image[subimage_ymin:subimage_ymax, subimage_xmin:subimage_xmax]
     
-    label_colors = {0: 'green', 1: 'red', 2: 'blue'} # 0 = black, 1 = lesion, 2 = tissue
-    border_thickness = 2
-    num_rows = shape_patches[0]
-    num_cols = shape_patches[1]
-    plt.figure(figsize=(20, 10))
-    ix = 1
-    for i in range(shape_patches[0]): #iterates over y
-        for j in range(shape_patches[1]): #iterates over x
-            # Get the image and label for the current position
-            sample_patch, label = all_images[i, j]
-
-            patch_ymin = i * step_x
-            patch_ymax = patch_ymin + GLOBAL_Y
-            patch_xmin = j * step_x
+    # print(np.shape(subimage))
+    
+    subimage_height, subimage_width, _ = subimage.shape
+    subimage_list, lesions_label = [], []
+    num_x_patches = (subimage_xmax - subimage_xmin) // GLOBAL_X
+    num_y_patches = (subimage_ymax - subimage_ymin) // GLOBAL_Y
+    fig, ax = plt.subplots()
+    ax.imshow(subimage, cmap='gray')
+    for y in range(num_y_patches):
+        for x in range(num_x_patches):
+            patch_xmin = 0 + x * GLOBAL_X
             patch_xmax = patch_xmin + GLOBAL_X
+            patch_ymin = 0 + y * GLOBAL_Y
+            patch_ymax = patch_ymin + GLOBAL_Y
+            patch = subimage[patch_ymin:patch_ymax, patch_xmin:patch_xmax]
+            # print('==================')
+            # print(np.shape(patch))
+            subimage_list.append(patch)
+            # lesions_label.append(1)
+            # rect = plt.Rectangle((patch_xmin, patch_ymin), GLOBAL_X, GLOBAL_Y, linewidth=2, edgecolor='r', facecolor='none')
+            # ax.add_patch(rect)
+    # print(np.shape(subimage_list))
+    # print(len(subimage_list))
+    # print('==================')
+    # plt.show()
+    # # print(np.shape(subimage_list))
+    # # print(len(subimage_list))
+    # input()
+    # fig, axes = plt.subplots(1, len(subimage_list), figsize=(12, 3))
+    # for i, subimage_part in enumerate(subimage_list):
+    #         if len(subimage_list) == 1:
+    #             ax = axes
+    #             print(subimage_part.shape)
+    #             input()
+    #             ax.imshow(subimage_part, cmap='gray')
+    #             ax.axis('off')
+    #             ax.set_title(f'Lesion {i+1}')
+    #         else:
+    #             ax = axes[i]
+    #             ax.imshow(subimage_part, cmap='gray')
+    #             ax.axis('off')
+    #             ax.set_title(f'Lesion {i+1}')
 
-            # Specify subplot and turn off axis
-            ax = plt.subplot(num_rows, num_cols, ix)
-            ax.set_xticks([])
-            ax.set_yticks([])
+    # plt.tight_layout()
+    # plt.show()
+    
+    # label_colors = {0: 'green', 1: 'red', 2: 'blue'} # 0 = black, 1 = lesion, 2 = tissue
+    # border_thickness = 2
+    # num_rows = shape_patches[0]
+    # num_cols = shape_patches[1]
+    # plt.figure(figsize=(15, 10))
+    # ix = 1
+    # for i in range(shape_patches[0]): #iterates over y
+    #     for j in range(shape_patches[1]): #iterates over x
+    #         # Get the image and label for the current position
+    #         if (i,j) in all_images:
+    #             sample_patch, label = all_images[i, j]
 
-            # Plot the image with the colored border
-            plt.imshow(sample_patch, cmap='gray')   
-            ax.spines['top'].set_color('none')
-            ax.spines['bottom'].set_color('none')
-            ax.spines['left'].set_color('none')
-            ax.spines['right'].set_color('none')
-            ax.set_xticks([])
-            ax.set_yticks([])
+    #             patch_ymin = i * step_x
+    #             patch_ymax = patch_ymin + GLOBAL_Y
+    #             patch_xmin = j * step_x
+    #             patch_xmax = patch_xmin + GLOBAL_X
 
-            # Add the colored border based on the label
-            ax.spines['top'].set_color(label_colors[label])
-            ax.spines['bottom'].set_color(label_colors[label])
-            ax.spines['left'].set_color(label_colors[label])
-            ax.spines['right'].set_color(label_colors[label])
+    #             # Specify subplot and turn off axis
+    #             ax = plt.subplot(num_rows, num_cols, ix)
+    #             ax.set_xticks([])
+    #             ax.set_yticks([])
 
-            # Increase the border thickness
-            ax.spines['top'].set_linewidth(border_thickness)
-            ax.spines['bottom'].set_linewidth(border_thickness)
-            ax.spines['left'].set_linewidth(border_thickness)
-            ax.spines['right'].set_linewidth(border_thickness)
-            title_text = f"{patch_xmin},{patch_xmax}\n" \
-                     f"{patch_ymin},{patch_ymax}"
-            ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
-            # plt.title(title_text,fontsize=10
+    #             # Plot the image with the colored border
+    #             plt.imshow(sample_patch, cmap='gray')   
+    #             ax.spines['top'].set_color('none')
+    #             ax.spines['bottom'].set_color('none')
+    #             ax.spines['left'].set_color('none')
+    #             ax.spines['right'].set_color('none')
+    #             ax.set_xticks([])
+    #             ax.set_yticks([])
 
-            ix += 1
-    plt.savefig('labeled_patches.png',dpi=450)
-    plt.show()
+    #             # Add the colored border based on the label
+    #             ax.spines['top'].set_color(label_colors[label])
+    #             ax.spines['bottom'].set_color(label_colors[label])
+    #             ax.spines['left'].set_color(label_colors[label])
+    #             ax.spines['right'].set_color(label_colors[label])
+
+    #             # Increase the border thickness
+    #             ax.spines['top'].set_linewidth(border_thickness)
+    #             ax.spines['bottom'].set_linewidth(border_thickness)
+    #             ax.spines['left'].set_linewidth(border_thickness)
+    #             ax.spines['right'].set_linewidth(border_thickness)
+    #             title_text = f"{patch_xmin},{patch_xmax}\n" \
+    #                     f"{patch_ymin},{patch_ymax}"
+    #             ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
+    #             # plt.title(title_text,fontsize=10
+
+    #             ix += 1
+    # plt.savefig('labeled_patches.png',dpi=450)
+    # plt.show()
+    #NON LESION CLASSIFICATIONS
     feature_list, label_list = [], []
-    for _, (matrix, integer) in all_images.items():
+    for key , (matrix, integer) in all_images.items():
         feature_list.append(matrix)
         label_list.append(int(integer))
-    return feature_list, label_list
+    #remove excess black images
+    feature_list, label_list = equalize_0_and1(feature_list, label_list)
+    #LESION CLASSIFICATIONS
+    if len(subimage_list) > 0:
+        label_lesions_list = [1] * len(subimage_list)
+        return feature_list + subimage_list, label_list + label_lesions_list
+    else:
+        return feature_list, label_list
     # plt.savefig('patch_example.png',dpi=450)
     # plt.show()
     # pe = PatchExtractor(patch_size=(GLOBAL_X, GLOBAL_Y))
@@ -377,6 +445,20 @@ def patch(image,list_mass):
     # print(patches)
     
     # input()
+def equalize_0_and1(image_list, label_list):
+    num_label_1 = np.sum(np.array(label_list) == 1)
+    num_label_0 = len(label_list) - num_label_1
+    if num_label_0 > num_label_1:
+        to_remove = num_label_0 - num_label_1
+        for i in range(len(label_list) - 1, -1, -1):
+            if label_list[i] == 0:
+                del label_list[i]
+                del image_list[i]
+                to_remove -= 1
+            if to_remove == 0:
+                break
+    return image_list, label_list
+
 def display_image(image):
     from PIL import Image
     # Downsample the image to 300x300
@@ -485,8 +567,8 @@ def main():
                         clahe_image = clahe(png_file)
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
-                        features_list, labels_list = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        list_features_total.append(features_list)
+                        features_list, labels_list  = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                        list_features_total.append(np.array(features_list))
                         list_labels_total.append(labels_list)
                         print(np.shape(list_features_total))
                         print(np.shape(list_labels_total))
@@ -502,7 +584,7 @@ def main():
                         # display_image(clahe_image)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
                         features_list, labels_list = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        list_features_total.append(features_list)
+                        list_features_total.append(np.array(features_list))
                         list_labels_total.append(labels_list)
                         print(np.shape(list_features_total))
                         print(np.shape(list_labels_total))
