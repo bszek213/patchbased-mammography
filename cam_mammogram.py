@@ -1,7 +1,11 @@
 #CAM MAMMOGRAM
-from tensorflow.keras.applications.resnet_v2 import ResNet152V2
+# from tensorflow.keras.applications.resnet_v2 import ResNet152V2
+from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D, GlobalAveragePooling2D, Dense
+from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, GlobalAveragePooling2D, Dense, Concatenate
 from tensorflow.keras.models import Model
+from tensorflow.keras.applications import DenseNet121
+from keras.applications.vgg16 import VGG16
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization
 import tensorflow as tf
 from keras.models import Sequential
@@ -155,7 +159,9 @@ def clahe(image):
     tile_s0 = 8
     tile_s1 = 8
     clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(tile_s0,tile_s1))
-    return clahe.apply(A_cv2)
+    clahe = clahe.apply(A_cv2)
+    clahe = cv2.cvtColor(clahe, cv2.COLOR_GRAY2RGB)
+    return clahe
     # cv2.imshow('Original Image', image)
     # cv2.imshow('CLAHE Enhanced Image', clahe_image)
     # cv2.waitKey(0)
@@ -166,19 +172,29 @@ def create_patch_model(input_shape):
     input shape = (250,250,3,12)
     """
     input_layer = Input(shape=input_shape)
-    rgb_input = Concatenate()([input_layer, input_layer, input_layer])
-    base_model = ResNet152V2(include_top=False, input_tensor=rgb_input)
-    x = GlobalAveragePooling2D()(base_model.output)
+    # rgb_input = Concatenate()([input_layer, input_layer, input_layer])
+    # base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    model = Sequential()
+    model.add(base_model)
+    model.add(GlobalAveragePooling2D())
+    model.add(Dense(3, activation="softmax"))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.summary()
+    # x = GlobalAveragePooling2D()(base_model.output)
     # x = Dense(128, activation='relu')(x)
-    outputs = Dense(2, activation='softmax')(x)
-    patch_model = Model(inputs=input_layer, outputs=outputs)
+    # outputs = Dense(3, activation='softmax')(x)
+    # x = GlobalAveragePooling2D()(base_model.output)
+    # # x = Dense(128, activation='relu')(x)
+    # outputs = Dense(3, activation='softmax')(x)
+    # patch_model = Model(inputs=input_layer, outputs=outputs)
     # base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=input_shape)
     # x = GlobalAveragePooling2D()(base_model.output)
     # x = Dense(128, activation='relu')(x)
     # outputs = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
 
     # patch_model = Model(inputs=base_model.input, outputs=outputs)
-    return patch_model
+    return model
 
 def create_global_model(num_rows,num_columns):
     # Input shape for each patch (1 channel for grayscale)
@@ -226,7 +242,7 @@ def patch(image,list_mass):
     step_y = max(GLOBAL_X, GLOBAL_Y)
 
     # Extract non-overlapping patches
-    patches = view_as_windows(image, (GLOBAL_Y, GLOBAL_X), step=(step_y, step_x))
+    patches = view_as_windows(image, (GLOBAL_Y, GLOBAL_X, 3), step=(step_y, step_x, 3))
     # patches=patchify(image,(GLOBAL_X,GLOBAL_Y),step=GLOBAL_X)
     list_mass = [int(x) for x in list_mass]
     xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
@@ -247,12 +263,31 @@ def patch(image,list_mass):
             patch_ymin = y_pix_curr
             patch_ymax = patch_ymin + GLOBAL_Y
             sample_patch = patches[i, j, :, :]
+            sample_patch = sample_patch[0]
 
             #black images
             if np.all(sample_patch < 40):
                 all_images[i,j] = [sample_patch,0]
             #lesion images
-            elif (((patch_xmin <= xmin <= patch_xmax) and 
+            elif (
+                # ((patch_xmin <= xmin <= patch_xmax) and 
+                #   (patch_ymin <= ymin <= patch_ymax)) or 
+                #   ((patch_xmin <= xmin <= patch_xmax) and 
+                #   (patch_ymin <= ymax <= patch_ymax)) or 
+                #   ((patch_xmin <= xmax <= patch_xmax) and 
+                #   (patch_ymin <= ymin <= patch_ymax)) or 
+                #   ((patch_xmin <= xmax <= patch_xmax) and 
+                #   (patch_ymin <= ymax <= patch_ymax)) or 
+
+
+
+                #   ((patch_xmin <= xmin <= patch_xmax) and 
+                #    (ymin <= y_pix_curr <= ymax)) or 
+
+                #   ((patch_xmin <= xmax <= patch_xmax) and 
+                #    (ymin <= y_pix_curr <= ymax))
+                (
+                (patch_xmin <= xmin <= patch_xmax) and 
                   (patch_ymin <= ymin <= patch_ymax)) or 
                   ((patch_xmin <= xmin <= patch_xmax) and 
                   (patch_ymin <= ymax <= patch_ymax)) or 
@@ -266,65 +301,70 @@ def patch(image,list_mass):
                   ((patch_xmin <= xmin <= patch_xmax) and 
                    (ymin <= y_pix_curr <= ymax)) or 
                   ((patch_xmin <= xmax <= patch_xmax) and 
-                   (ymin <= y_pix_curr <= ymax))
+                   (ymin <= y_pix_curr <= ymax)) or 
+
+                   ((patch_ymin <= ymin <= patch_ymax) and
+                    (xmin <= x_pix_curr <= xmax)) or 
+                    ((patch_ymin <= ymax <= patch_ymax) and
+                    (xmin <= x_pix_curr <= xmax))
+
+
                   ): #patch_xmin >= xmin and patch_xmax <= xmax and patch_ymin >= ymin and patch_ymax <= ymax
                 all_images[i,j] = [sample_patch,1]
             #tissue images
             else:
                 all_images[i,j] = [sample_patch,2]
-            # print([x_pix_curr, y_pix_curr])
-            # input()
-    # print(list_mass)
+    print(list_mass)
     
     label_colors = {0: 'green', 1: 'red', 2: 'blue'} # 0 = black, 1 = lesion, 2 = tissue
     border_thickness = 2
     num_rows = shape_patches[0]
     num_cols = shape_patches[1]
-    # plt.figure(figsize=(7, 7))
-    # ix = 1
-    # for i in range(shape_patches[0]): #iterates over y
-    #     for j in range(shape_patches[1]): #iterates over x
-    #         # Get the image and label for the current position
-    #         sample_patch, label = all_images[i, j]
+    plt.figure(figsize=(20, 10))
+    ix = 1
+    for i in range(shape_patches[0]): #iterates over y
+        for j in range(shape_patches[1]): #iterates over x
+            # Get the image and label for the current position
+            sample_patch, label = all_images[i, j]
 
-    #         patch_ymin = i * step_x
-    #         patch_ymax = patch_ymin + GLOBAL_Y
-    #         patch_xmin = j * step_x
-    #         patch_xmax = patch_xmin + GLOBAL_X
+            patch_ymin = i * step_x
+            patch_ymax = patch_ymin + GLOBAL_Y
+            patch_xmin = j * step_x
+            patch_xmax = patch_xmin + GLOBAL_X
 
-    #         # Specify subplot and turn off axis
-    #         ax = plt.subplot(num_rows, num_cols, ix)
-    #         ax.set_xticks([])
-    #         ax.set_yticks([])
+            # Specify subplot and turn off axis
+            ax = plt.subplot(num_rows, num_cols, ix)
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-    #         # Plot the image with the colored border
-    #         plt.imshow(sample_patch, cmap='gray')
-    #         ax.spines['top'].set_color('none')
-    #         ax.spines['bottom'].set_color('none')
-    #         ax.spines['left'].set_color('none')
-    #         ax.spines['right'].set_color('none')
-    #         ax.set_xticks([])
-    #         ax.set_yticks([])
+            # Plot the image with the colored border
+            plt.imshow(sample_patch, cmap='gray')   
+            ax.spines['top'].set_color('none')
+            ax.spines['bottom'].set_color('none')
+            ax.spines['left'].set_color('none')
+            ax.spines['right'].set_color('none')
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-    #         # Add the colored border based on the label
-    #         ax.spines['top'].set_color(label_colors[label])
-    #         ax.spines['bottom'].set_color(label_colors[label])
-    #         ax.spines['left'].set_color(label_colors[label])
-    #         ax.spines['right'].set_color(label_colors[label])
+            # Add the colored border based on the label
+            ax.spines['top'].set_color(label_colors[label])
+            ax.spines['bottom'].set_color(label_colors[label])
+            ax.spines['left'].set_color(label_colors[label])
+            ax.spines['right'].set_color(label_colors[label])
 
-    #         # Increase the border thickness
-    #         ax.spines['top'].set_linewidth(border_thickness)
-    #         ax.spines['bottom'].set_linewidth(border_thickness)
-    #         ax.spines['left'].set_linewidth(border_thickness)
-    #         ax.spines['right'].set_linewidth(border_thickness)
-    #         title_text = f"{patch_xmin},{patch_xmax}\n" \
-    #                  f"{patch_ymin},{patch_ymax}"
-    #         # ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
-    #         # plt.title(title_text,fontsize=10)
+            # Increase the border thickness
+            ax.spines['top'].set_linewidth(border_thickness)
+            ax.spines['bottom'].set_linewidth(border_thickness)
+            ax.spines['left'].set_linewidth(border_thickness)
+            ax.spines['right'].set_linewidth(border_thickness)
+            title_text = f"{patch_xmin},{patch_xmax}\n" \
+                     f"{patch_ymin},{patch_ymax}"
+            ax.text(-0.7, 0.5, title_text, transform=ax.transAxes, fontsize=8, va='center', ha='center', rotation='horizontal')
+            # plt.title(title_text,fontsize=10
 
-    #         ix += 1
-    # plt.savefig('labeled_patches.png',dpi=450)
-    # plt.show()
+            ix += 1
+    plt.savefig('labeled_patches.png',dpi=450)
+    plt.show()
     feature_list, label_list = [], []
     for _, (matrix, integer) in all_images.items():
         feature_list.append(matrix)
@@ -365,11 +405,62 @@ def display_image(image):
     plt.savefig('downsampleVsOG.png',dpi=400)
     plt.close()
 
+def create_resnet152v2(input_shape):
+    input_layer = Input(shape=input_shape)  # input_shape should be (250, 250, 1) for grayscale images
+
+    # Initial Convolution
+    x = Conv2D(64, (7, 7), strides=(2, 2), padding='same')(input_layer)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
+
+    # Define residual blocks
+    x = residual_block(x, 64, 3)
+    x = residual_block(x, 128, 8)
+    x = residual_block(x, 256, 36)
+    x = residual_block(x, 512, 3)
+
+    # Global Average Pooling
+    x = GlobalAveragePooling2D()(x)
+
+    # Fully connected layers for classification
+    x = Dense(128, activation='relu')(x)
+    outputs = Dense(3, activation='softmax')(x)
+
+    model = Model(inputs=input_layer, outputs=outputs)
+    return model
+
+def residual_block(x, filters, blocks, stride=(1, 1)):
+    identity = x
+    for i in range(blocks):
+        x = residual_unit(x, filters, stride=(1, 1) if i > 0 else stride)
+    return x + identity
+
+def residual_unit(x, filters, stride=(1, 1)):
+    identity = x
+
+    x = Conv2D(filters, (1, 1), strides=stride)(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+
+    x = Conv2D(filters, (3, 3), padding='same')(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+
+    x = Conv2D(4 * filters, (1, 1))(x)
+    x = BatchNormalization()(x)
+
+    if stride != (1, 1) or identity.shape[-1] != 4 * filters:
+        identity = Conv2D(4 * filters, (1, 1), strides=stride)(identity)
+        identity = BatchNormalization()(identity)
+
+    x = x + identity
+    x = Activation('relu')(x)
+
+    return x
+
 def main():
     # all_dir = load_images()
-    glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
-    df = read_df()
-    df.dropna(inplace=True)
     dict_save_benign = {}
     # dict_image_benign= {}
     dict_save_malig = {}
@@ -378,7 +469,10 @@ def main():
     label_benign, label_malignant = [], []
     row_list, col_list = [], []
     list_features_total, list_labels_total = [], []
-    if not os.path.exists('data.pkl'):
+    if not os.path.exists('X_train.npy'):
+        glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
+        df = read_df()
+        df.dropna(inplace=True)
         for iteration, (index, row) in enumerate(df.iterrows()):
             image_type = row['image_id'] + '.dicom'
             dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
@@ -429,18 +523,29 @@ def main():
         features = np.vstack(list_features_total)
         print(features.shape)
         X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
-        with open('data.pkl', 'wb') as file:
-            pickle.dump((X_train, X_test, y_train, y_test), file)
+        np.save('X_train.npy', X_train)
+        np.save('X_test.npy', X_test)
+        np.save('y_train.npy', y_train)
+        np.save('y_test.npy', y_test)
     else:
-        with open('data.pkl', 'rb') as file:
-            print(pickle.load(file))
-            X_train, X_test, y_train, y_test = pickle.load(file)
+        X_train = np.load('X_train.npy')
+        X_test = np.load('X_test.npy')
+        y_train = np.load('y_train.npy')
+        y_test = np.load('y_test.npy')
     print(f'x_train size {np.shape(X_train)}')
     print(f'X_test size {np.shape(X_test)}')
     print(f'y_train size {np.shape(y_train)}')
     print(f'y_test size {np.shape(y_test)}')
 
-    # #train model
+    # X_train = X_train.reshape(X_train.shape + (1,))
+    # X_test = X_test.reshape(X_test.shape + (1,))
+    # X_train = np.concatenate([X_train, X_train, X_train], axis=-1)
+    # X_test = np.concatenate([X_test, X_test, X_test], axis=-1)
+    #train model
+    patch_architecture = create_patch_model((GLOBAL_X,GLOBAL_Y,3))
+    history = patch_architecture.fit(X_train, y_train, epochs=100, batch_size=64,
+                                    validation_data=(X_test, y_test), verbose=1)
+
     # global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
     # history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
     #                                 validation_data=(X_test, y_test), verbose=1)
