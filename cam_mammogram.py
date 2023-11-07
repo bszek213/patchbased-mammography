@@ -649,6 +649,7 @@ def main():
         plt.legend()
         if history.history['val_accuracy'] > previous_val_acc:
             save_patch_model = patch_architecture
+            print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
 
     plt.tight_layout()  # Adjust subplot spacing for better appearance
     plt.savefig('training_accuracy_loss.png', dpi=400)
