@@ -23,6 +23,7 @@ from statistics import mode
 # import pickle
 from skimage.util import view_as_windows
 from tensorflow.keras.models import save_model, load_model
+from tensorflow.keras.metrics import F1Score
 # from pandas import DataFrame
 # from itertools import chain
 """
@@ -180,7 +181,8 @@ def create_patch_model(input_shape):
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
     model.add(Dense(3, activation="softmax"))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', 
+                  metrics=['accuracy', F1Score(name='f1_score')])
     model.summary()
     # x = GlobalAveragePooling2D()(base_model.output)
     # x = Dense(128, activation='relu')(x)
@@ -460,6 +462,31 @@ def equalize_0_and1(image_list, label_list):
                 break
     return image_list, label_list
 
+def randomly_select_half_data(data, labels):
+    data_to_keep = []
+    labels_to_keep = []
+    data_with_label_1 = []
+
+    for i, label_list in enumerate(labels):
+        if 1 in label_list:
+            data_with_label_1.append(i)
+        else:
+            data_to_keep.append(data[i])
+            labels_to_keep.append(label_list)
+
+    num_samples = len(data_to_keep)
+    num_samples_to_select = num_samples // 2
+
+    if num_samples_to_select > len(data_with_label_1):
+        num_samples_to_select = len(data_with_label_1)
+
+    selected_indices = np.random.choice(data_with_label_1, num_samples_to_select, replace=False)
+
+    for i in selected_indices:
+        data_to_keep.append(data[i])
+        labels_to_keep.append(labels[i])
+    return data_to_keep, labels_to_keep
+
 def display_image(image):
     from PIL import Image
     # Downsample the image to 300x300
@@ -602,9 +629,11 @@ def main():
     #     label_benign = np.array(label_benign, dtype='int32')
     #     label_malignant = np.array(label_malignant, dtype='int32')
     #     labels = np.concatenate((label_benign, label_malignant))
-        labels = tf.keras.utils.to_categorical(np.array([item for sublist in list_labels_total for item in sublist], dtype="int"), 3)
-        features = np.vstack(list_features_total)
-        print(features.shape)
+        list_features_total_adj,list_labels_total_adj = randomly_select_half_data(list_features_total,list_labels_total)
+        labels = tf.keras.utils.to_categorical(np.array([item for sublist in list_labels_total_adj for item in sublist], dtype="int"), 3)
+        features = np.vstack(list_features_total_adj)
+        print(np.shape(features))
+        print(np.shape(labels))
         X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
         np.save('X_train.npy', X_train)
         np.save('X_test.npy', X_test)
@@ -628,7 +657,7 @@ def main():
     patch_architecture = create_patch_model((GLOBAL_X,GLOBAL_Y,3))
     plt.figure(figsize=(12, 6))
     previous_val_acc = 0
-    for i in range(10):
+    for i in range(5):
         history = patch_architecture.fit(X_train, y_train, epochs=30, batch_size=64,
                                         validation_data=(X_test, y_test), verbose=1)
 
