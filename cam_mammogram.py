@@ -16,12 +16,13 @@ import os
 import cv2
 from pandas import read_csv
 # from sklearn.feature_extraction.image import PatchExtractor
-from patchify import patchify
+# from patchify import patchify
 # from np_utils import to_categorical
 from sklearn.model_selection import train_test_split
 from statistics import mode
-import pickle
+# import pickle
 from skimage.util import view_as_windows
+from tensorflow.keras.models import save_model, load_model
 # from pandas import DataFrame
 # from itertools import chain
 """
@@ -625,8 +626,33 @@ def main():
     # X_test = np.concatenate([X_test, X_test, X_test], axis=-1)
     #train model
     patch_architecture = create_patch_model((GLOBAL_X,GLOBAL_Y,3))
-    history = patch_architecture.fit(X_train, y_train, epochs=100, batch_size=64,
-                                    validation_data=(X_test, y_test), verbose=1)
+    plt.figure(figsize=(12, 6))
+    previous_val_acc = 0
+    for i in range(10):
+        history = patch_architecture.fit(X_train, y_train, epochs=30, batch_size=64,
+                                        validation_data=(X_test, y_test), verbose=1)
+
+        plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
+        plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i} iteration)')
+        plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i} iteration)')
+        plt.title('Resnet Baseline Model Accuracy History')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend()
+
+        plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
+        plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
+        plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
+        plt.title('Resnet Baseline Model Loss History')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        if history.history['val_accuracy'] > previous_val_acc:
+            save_patch_model = patch_architecture
+
+    plt.tight_layout()  # Adjust subplot spacing for better appearance
+    plt.savefig('training_accuracy_loss.png', dpi=400)
+    save_model(save_patch_model,'patch_VGG16.h5')
 
     # global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
     # history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
