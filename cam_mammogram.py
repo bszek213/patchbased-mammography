@@ -175,8 +175,8 @@ def create_patch_model(input_shape):
     """
     input_layer = Input(shape=input_shape)
     # rgb_input = Concatenate()([input_layer, input_layer, input_layer])
-    # base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
-    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    # base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
     model = Sequential()
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
@@ -657,14 +657,14 @@ def main():
     patch_architecture = create_patch_model((GLOBAL_X,GLOBAL_Y,3))
     plt.figure(figsize=(12, 6))
     previous_val_acc = 0
-    for i in range(5):
-        history = patch_architecture.fit(X_train, y_train, epochs=30, batch_size=64,
+    for i in range(10):
+        history = patch_architecture.fit(X_train, y_train, epochs=10, batch_size=64,
                                         validation_data=(X_test, y_test), verbose=1)
 
         plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
         plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i} iteration)')
         plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i} iteration)')
-        plt.title('Resnet Baseline Model Accuracy History')
+        plt.title('Densenet Baseline Model Accuracy History')
         plt.xlabel('Epoch')
         plt.ylabel('Accuracy')
         plt.legend()
@@ -672,17 +672,17 @@ def main():
         plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
         plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
         plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-        plt.title('Resnet Baseline Model Loss History')
+        plt.title('Densenet Baseline Model Loss History')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
-        if history.history['val_accuracy'] > previous_val_acc:
+        if history.history['val_accuracy'][-1] > previous_val_acc:
             save_patch_model = patch_architecture
             print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
 
     plt.tight_layout()  # Adjust subplot spacing for better appearance
-    plt.savefig('training_accuracy_loss.png', dpi=400)
-    save_model(save_patch_model,'patch_VGG16.h5')
+    plt.savefig('training_accuracy_loss_DenseNet.png', dpi=400)
+    save_model(save_patch_model,'patch_DenseNet121.h5')
 
     # global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
     # history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
