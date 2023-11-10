@@ -623,7 +623,7 @@ def main():
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
                         feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT  = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
-                        if iteration % 2 == 0:
+                        if iteration % 5 == 0 and iteration != 0:
                             try:
                                 combined_array = np.vstack((combined_array, feature_list))
                                 list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
@@ -655,7 +655,7 @@ def main():
                         # display_image(clahe_image)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
                         feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
-                        if iteration % 2 == 0:
+                        if iteration % 5 == 0 and iteration != 0:
                             try:
                                 combined_array = np.vstack((combined_array, feature_list))
                                 list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
@@ -723,8 +723,6 @@ def main():
     #label counts
     label_counts = np.sum(y_train, axis=0)
     total_labels = len(y_train)
-    print(label_counts)
-    input()
     label_percentages = (label_counts / total_labels) * 100
     for label, percentage in enumerate(label_percentages):
         label_str = " ".join([str(int(val)) for val in y_train[label]])
