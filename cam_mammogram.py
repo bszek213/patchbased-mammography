@@ -237,7 +237,7 @@ def create_global_model(num_rows,num_columns):
 #     model.compile(optimizer=optimizer, loss="categorical_crossentropy", metrics="accuracy")
 #     return model
 
-def patch(image,list_mass):
+def patch(image,list_mass,GLOBAL_LESION_COUNT):
     """
     Upper left corner 0,0 pixel in python
     """
@@ -338,8 +338,8 @@ def patch(image,list_mass):
     subimage_list, lesions_label = [], []
     num_x_patches = (subimage_xmax - subimage_xmin) // GLOBAL_X
     num_y_patches = (subimage_ymax - subimage_ymin) // GLOBAL_Y
-    fig, ax = plt.subplots()
-    ax.imshow(subimage, cmap='gray')
+    # fig, ax = plt.subplots()
+    # ax.imshow(subimage, cmap='gray')
     for y in range(num_y_patches):
         for x in range(num_x_patches):
             patch_xmin = 0 + x * GLOBAL_X
@@ -353,6 +353,9 @@ def patch(image,list_mass):
             # lesions_label.append(1)
             # rect = plt.Rectangle((patch_xmin, patch_ymin), GLOBAL_X, GLOBAL_Y, linewidth=2, edgecolor='r', facecolor='none')
             # ax.add_patch(rect)
+    GLOBAL_LESION_COUNT += len(subimage_list)
+    # print(f'number of lesion images: {len(subimage_list)}')
+    # print(f'total lesion images: {GLOBAL_LESION_COUNT}')
     # print(np.shape(subimage_list))
     # print(len(subimage_list))
     # print('==================')
@@ -434,13 +437,14 @@ def patch(image,list_mass):
         feature_list.append(matrix)
         label_list.append(int(integer))
     #remove excess black images
-    feature_list, label_list = equalize_0_and1(feature_list, label_list)
+    feature_list, label_list = equalize_0_and_2(feature_list, label_list)
     #LESION CLASSIFICATIONS
     if len(subimage_list) > 0:
         label_lesions_list = [1] * len(subimage_list)
-        return feature_list + subimage_list, label_list + label_lesions_list
+        print(f'number of labels for lesions: {len(label_lesions_list)}')
+        return feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT
     else:
-        return feature_list, label_list
+        return feature_list, None, label_list, None, GLOBAL_LESION_COUNT
     # plt.savefig('patch_example.png',dpi=450)
     # plt.show()
     # pe = PatchExtractor(patch_size=(GLOBAL_X, GLOBAL_Y))
@@ -448,18 +452,31 @@ def patch(image,list_mass):
     # print(patches)
     
     # input()
-def equalize_0_and1(image_list, label_list):
-    num_label_1 = np.sum(np.array(label_list) == 1)
-    num_label_0 = len(label_list) - num_label_1
-    if num_label_0 > num_label_1:
-        to_remove = num_label_0 - num_label_1
-        for i in range(len(label_list) - 1, -1, -1):
+def equalize_0_and_2(image_list, label_list):
+    num_label_0 = np.sum(np.array(label_list) == 0)
+    num_label_2 = np.sum(np.array(label_list) == 2)
+
+    if num_label_0 > num_label_2:
+        to_remove = num_label_0 - num_label_2
+        i = 0
+        while to_remove > 0 and i < len(label_list):
             if label_list[i] == 0:
                 del label_list[i]
                 del image_list[i]
                 to_remove -= 1
-            if to_remove == 0:
-                break
+            else:
+                i += 1
+    elif num_label_2 > num_label_0:
+        to_remove = num_label_2 - num_label_0
+        i = 0
+        while to_remove > 0 and i < len(label_list):
+            if label_list[i] == 2:
+                del label_list[i]
+                del image_list[i]
+                to_remove -= 1
+            else:
+                i += 1
+
     return image_list, label_list
 
 def randomly_select_half_data(data, labels):
@@ -569,6 +586,12 @@ def residual_unit(x, filters, stride=(1, 1)):
 
     return x
 
+def count_ones_in_sublists(sublist_list):
+    count = 0
+    for sublist in sublist_list:
+        count += sublist.count(1)
+    return count
+
 def main():
     # all_dir = load_images()
     dict_save_benign = {}
@@ -578,11 +601,15 @@ def main():
     dict_image_malig, dict_image_benign = [], []
     label_benign, label_malignant = [], []
     row_list, col_list = [], []
-    list_features_total, list_labels_total = [], []
+    list_features_total, list_labels_total, list_images_lesion, list_label_images = [], [], [], []
+    combined_array = np.empty((0, 250, 250, 3), dtype=np.uint8)
+    combined_array_lesion = np.empty((0, 250, 250, 3), dtype=np.uint8)
+    list_labels_total_np = np.array([])
     if not os.path.exists('X_train.npy'):
         glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
         df = read_df()
         df.dropna(inplace=True)
+        GLOBAL_LESION_COUNT = 0
         for iteration, (index, row) in enumerate(df.iterrows()):
             image_type = row['image_id'] + '.dicom'
             dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
@@ -590,16 +617,32 @@ def main():
             if os.path.exists(dicom_path):
                 png_file = convert_dicom_to_png(dicom_path)
                 if png_file is not None:
-                    #BENIGN
+                    #BENIGNlist_images_lesion
                     if row['breast_birads'] > 1 and row['breast_birads'] < 4:
                         clahe_image = clahe(png_file)
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
-                        features_list, labels_list  = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        list_features_total.append(np.array(features_list))
-                        list_labels_total.append(labels_list)
-                        print(np.shape(list_features_total))
-                        print(np.shape(list_labels_total))
+                        feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT  = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
+                        if iteration % 2 == 0:
+                            try:
+                                combined_array = np.vstack((combined_array, feature_list))
+                                list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
+                                # list_labels_total.append(label_list)
+                                # print(list_labels_total)
+                            except:
+                                    print('dimension issues. Just do not use that data')
+                        # combined_array = np.vstack((combined_array, feature_list))
+                        # list_features_total.append(np.array(feature_list))
+                        # list_labels_total.append(label_list)
+                        if subimage_list != None:
+                            # list_images_lesion.append(np.array(subimage_list))
+                            combined_array_lesion = np.vstack((combined_array_lesion, subimage_list))
+                        if label_lesions_list != None:
+                            list_label_images.append(label_lesions_list)
+                        print(np.shape(list_labels_total_np))
+                        # print(np.shape(combined_array_lesion))
+                        # print(np.shape(list_features_total))
+                        # print(count_ones_in_sublists(list_labels_total))
                         # row_list.append(np.shape(image_patch)[0])
                         # col_list.append(np.shape(image_patch)[1])
                         # dict_image_benign.append(image_patch)
@@ -611,11 +654,25 @@ def main():
                         clahe_image = clahe(png_file)
                         # display_image(clahe_image)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
-                        features_list, labels_list = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        list_features_total.append(np.array(features_list))
-                        list_labels_total.append(labels_list)
-                        print(np.shape(list_features_total))
-                        print(np.shape(list_labels_total))
+                        feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
+                        if iteration % 2 == 0:
+                            try:
+                                combined_array = np.vstack((combined_array, feature_list))
+                                list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
+                                # list_labels_total.append(label_list)
+                                # print(list_labels_total)
+                            except:
+                                    print('dimension issues. Just do not use that data')
+                        # list_features_total.append(np.array(feature_list))
+                        if subimage_list != None:
+                            # list_images_lesion.append(np.array(subimage_list))
+                            combined_array_lesion = np.vstack((combined_array_lesion, subimage_list))
+                        if label_lesions_list != None:
+                            list_label_images.append(label_lesions_list)
+                        print(np.shape(list_labels_total_np))
+                        # print(np.shape(combined_array))
+                        # print(count_ones_in_sublists(list_label_images))
+                        # print(count_ones_in_sublists(label_list))
                         # row_list.append(np.shape(image_patch)[0])
                         # col_list.append(np.shape(image_patch)[1])
                         # dict_image_malig.append(image_patch)
@@ -629,9 +686,23 @@ def main():
     #     label_benign = np.array(label_benign, dtype='int32')
     #     label_malignant = np.array(label_malignant, dtype='int32')
     #     labels = np.concatenate((label_benign, label_malignant))
-        list_features_total_adj,list_labels_total_adj = randomly_select_half_data(list_features_total,list_labels_total)
-        labels = tf.keras.utils.to_categorical(np.array([item for sublist in list_labels_total_adj for item in sublist], dtype="int"), 3)
-        features = np.vstack(list_features_total_adj)
+        # list_features_total_adj,list_labels_total_adj = randomly_select_half_data(list_features_total,list_labels_total)
+        list_ones = [item for sublist in list_label_images for item in sublist]
+        # list_other = [item for sublist in label_list for item in sublist]
+
+        array_lesion = np.array(list_ones, dtype="int") #here is the problem
+        # array_non_lesion = np.array(label_list,  dtype="int")
+        labels = tf.keras.utils.to_categorical(np.concatenate((list_labels_total_np, array_lesion)), num_classes=3, dtype="int")
+        
+        # for sublist in list_features_total_adj:
+        #     print(np.shape(sublist))
+        features = np.concatenate((combined_array,combined_array_lesion), axis=0)
+        # np_image_lesion = np.concatenate(list_images_lesion, axis=0)
+        # np_image_non_lesion = np.vstack(list_features_total_adj)
+        # np_image_lesion = np.vstack(list_images_lesion)
+        # print(np.shape(np_image_non_lesion))
+        # print(np.shape(np_image_lesion))
+        # features = np.concatenate((np_image_non_lesion,np_image_lesion))
         print(np.shape(features))
         print(np.shape(labels))
         X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
@@ -649,22 +720,32 @@ def main():
     print(f'y_train size {np.shape(y_train)}')
     print(f'y_test size {np.shape(y_test)}')
 
+    #label counts
+    label_counts = np.sum(y_train, axis=0)
+    total_labels = len(y_train)
+    print(label_counts)
+    input()
+    label_percentages = (label_counts / total_labels) * 100
+    for label, percentage in enumerate(label_percentages):
+        label_str = " ".join([str(int(val)) for val in y_train[label]])
+        print(f"Label [{label_str}]: {percentage:.2f}%")
     # X_train = X_train.reshape(X_train.shape + (1,))
     # X_test = X_test.reshape(X_test.shape + (1,))
     # X_train = np.concatenate([X_train, X_train, X_train], axis=-1)
     # X_test = np.concatenate([X_test, X_test, X_test], axis=-1)
     #train model
     patch_architecture = create_patch_model((GLOBAL_X,GLOBAL_Y,3))
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(15, 8))
     previous_val_acc = 0
-    for i in range(10):
+    for i in range(5):
         history = patch_architecture.fit(X_train, y_train, epochs=10, batch_size=64,
                                         validation_data=(X_test, y_test), verbose=1)
 
         plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
-        plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i} iteration)')
-        plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i} iteration)')
-        plt.title('Densenet Baseline Model Accuracy History')
+        plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
+        plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
+        plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
+        plt.title('DenseNet Baseline Model Accuracy History')
         plt.xlabel('Epoch')
         plt.ylabel('Accuracy')
         plt.legend()
