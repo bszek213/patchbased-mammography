@@ -182,7 +182,7 @@ def create_patch_model(input_shape):
     model.add(GlobalAveragePooling2D())
     model.add(Dense(3, activation="softmax"))
     model.compile(loss='categorical_crossentropy', optimizer='adam', 
-                  metrics=['accuracy', F1Score(name='f1_score')])
+                  metrics=['accuracy'])
     model.summary()
     # x = GlobalAveragePooling2D()(base_model.output)
     # x = Dense(128, activation='relu')(x)
@@ -742,7 +742,7 @@ def main():
         plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
         plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
         plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
-        plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
+        #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
         plt.title('DenseNet Baseline Model Accuracy History')
         plt.xlabel('Epoch')
         plt.ylabel('Accuracy')
