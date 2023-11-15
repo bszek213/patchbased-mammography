@@ -180,7 +180,7 @@ def create_patch_model(input_shape):
     model = Sequential()
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
-    model.add(Dense(3, activation="softmax"))
+    model.add(Dense(2, activation="softmax"))
     model.compile(loss='categorical_crossentropy', optimizer='adam', 
                   metrics=['accuracy'])
     model.summary()
@@ -270,7 +270,8 @@ def patch(image,list_mass,GLOBAL_LESION_COUNT):
 
             #black images
             if np.all(sample_patch < 40):
-                all_images[i,j] = [sample_patch,0]
+                continue
+                # all_images[i,j] = [sample_patch,0]
             #lesion images
             elif (
                 # ((patch_xmin <= xmin <= patch_xmax) and 
@@ -319,6 +320,7 @@ def patch(image,list_mass,GLOBAL_LESION_COUNT):
     #FIND THE SUBIMAGES OF THE LESIONS
     center_x = (list_mass[0] + list_mass[1]) // 2
     center_y = (list_mass[2] + list_mass[3]) // 2
+
     if (list_mass[1] - list_mass[2] < GLOBAL_X) or (list_mass[3] - list_mass[2] < GLOBAL_Y):
         subimage_xmin = max(center_x - GLOBAL_X // 2, 0)
         subimage_xmax = min(center_x + GLOBAL_X // 2, image.shape[1])
@@ -332,28 +334,32 @@ def patch(image,list_mass,GLOBAL_LESION_COUNT):
 
     subimage = image[subimage_ymin:subimage_ymax, subimage_xmin:subimage_xmax]
     
-    # print(np.shape(subimage))
-    
-    subimage_height, subimage_width, _ = subimage.shape
+    # subimage_height, subimage_width, _ = subimage.shape
     subimage_list, lesions_label = [], []
-    num_x_patches = (subimage_xmax - subimage_xmin) // GLOBAL_X
-    num_y_patches = (subimage_ymax - subimage_ymin) // GLOBAL_Y
+    # num_x_patches = (subimage_xmax - subimage_xmin) // GLOBAL_X
+    # num_y_patches = (subimage_ymax - subimage_ymin) // GLOBAL_Y
+    window_size = 75
+    num_x_patches = (subimage_xmax - subimage_xmin + 1) // window_size
+    num_y_patches = (subimage_ymax - subimage_ymin + 1) // window_size
     # fig, ax = plt.subplots()
     # ax.imshow(subimage, cmap='gray')
-    for y in range(num_y_patches):
-        for x in range(num_x_patches):
-            patch_xmin = 0 + x * GLOBAL_X
+    combined_array_lesion = []
+    for y in range(subimage_ymin - GLOBAL_Y // 2, subimage_ymax - GLOBAL_Y // 2 + 1, window_size):
+        for x in range(subimage_xmin - GLOBAL_X // 2, subimage_xmax - GLOBAL_X // 2 + 1, window_size):
+            patch_xmin = x
             patch_xmax = patch_xmin + GLOBAL_X
-            patch_ymin = 0 + y * GLOBAL_Y
+            patch_ymin = y
             patch_ymax = patch_ymin + GLOBAL_Y
-            patch = subimage[patch_ymin:patch_ymax, patch_xmin:patch_xmax]
-            # print('==================')
-            # print(np.shape(patch))
-            subimage_list.append(patch)
-            # lesions_label.append(1)
+            patch = image[patch_ymin:patch_ymax, patch_xmin:patch_xmax]
+            if patch.shape == (250, 250, 3):
+                combined_array_lesion.append(patch)
+            # plt.imshow(patch,cmap='gray')
+            # plt.pause(0.15)  # Pause for 500 milliseconds
+            # plt.clf()
             # rect = plt.Rectangle((patch_xmin, patch_ymin), GLOBAL_X, GLOBAL_Y, linewidth=2, edgecolor='r', facecolor='none')
-            # ax.add_patch(rect)
-    GLOBAL_LESION_COUNT += len(subimage_list)
+            # ax.add_patch(rect)    
+    lesion_image_array = np.array(combined_array_lesion)
+    GLOBAL_LESION_COUNT += len(combined_array_lesion)
     # print(f'number of lesion images: {len(subimage_list)}')
     # print(f'total lesion images: {GLOBAL_LESION_COUNT}')
     # print(np.shape(subimage_list))
@@ -437,12 +443,12 @@ def patch(image,list_mass,GLOBAL_LESION_COUNT):
         feature_list.append(matrix)
         label_list.append(int(integer))
     #remove excess black images
-    feature_list, label_list = equalize_0_and_2(feature_list, label_list)
+    # feature_list, label_list = equalize_0_and_2(feature_list, label_list)
     #LESION CLASSIFICATIONS
-    if len(subimage_list) > 0:
-        label_lesions_list = [1] * len(subimage_list)
-        print(f'number of labels for lesions: {len(label_lesions_list)}')
-        return feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT
+    if len(combined_array_lesion) > 0:
+        label_lesions_list = [1] * len(combined_array_lesion)
+        # print(f'number of labels for lesions: {len(combined_array_lesion)}')
+        return feature_list, lesion_image_array, label_list, label_lesions_list, GLOBAL_LESION_COUNT
     else:
         return feature_list, None, label_list, None, GLOBAL_LESION_COUNT
     # plt.savefig('patch_example.png',dpi=450)
@@ -532,60 +538,6 @@ def display_image(image):
     plt.savefig('downsampleVsOG.png',dpi=400)
     plt.close()
 
-def create_resnet152v2(input_shape):
-    input_layer = Input(shape=input_shape)  # input_shape should be (250, 250, 1) for grayscale images
-
-    # Initial Convolution
-    x = Conv2D(64, (7, 7), strides=(2, 2), padding='same')(input_layer)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-    x = MaxPooling2D((3, 3), strides=(2, 2), padding='same')(x)
-
-    # Define residual blocks
-    x = residual_block(x, 64, 3)
-    x = residual_block(x, 128, 8)
-    x = residual_block(x, 256, 36)
-    x = residual_block(x, 512, 3)
-
-    # Global Average Pooling
-    x = GlobalAveragePooling2D()(x)
-
-    # Fully connected layers for classification
-    x = Dense(128, activation='relu')(x)
-    outputs = Dense(3, activation='softmax')(x)
-
-    model = Model(inputs=input_layer, outputs=outputs)
-    return model
-
-def residual_block(x, filters, blocks, stride=(1, 1)):
-    identity = x
-    for i in range(blocks):
-        x = residual_unit(x, filters, stride=(1, 1) if i > 0 else stride)
-    return x + identity
-
-def residual_unit(x, filters, stride=(1, 1)):
-    identity = x
-
-    x = Conv2D(filters, (1, 1), strides=stride)(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(filters, (3, 3), padding='same')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(4 * filters, (1, 1))(x)
-    x = BatchNormalization()(x)
-
-    if stride != (1, 1) or identity.shape[-1] != 4 * filters:
-        identity = Conv2D(4 * filters, (1, 1), strides=stride)(identity)
-        identity = BatchNormalization()(identity)
-
-    x = x + identity
-    x = Activation('relu')(x)
-
-    return x
-
 def count_ones_in_sublists(sublist_list):
     count = 0
     for sublist in sublist_list:
@@ -623,7 +575,7 @@ def main():
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
                         feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT  = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
-                        if iteration % 5 == 0 and iteration != 0:
+                        if iteration % 3 == 0:# and iteration != 0:
                             try:
                                 combined_array = np.vstack((combined_array, feature_list))
                                 list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
@@ -634,12 +586,14 @@ def main():
                         # combined_array = np.vstack((combined_array, feature_list))
                         # list_features_total.append(np.array(feature_list))
                         # list_labels_total.append(label_list)
-                        if subimage_list != None:
-                            # list_images_lesion.append(np.array(subimage_list))
-                            combined_array_lesion = np.vstack((combined_array_lesion, subimage_list))
+                        # if len(subimage_list) >= 0:
+                        #     # list_images_lesion.append(np.array(subimage_list))
+                            
                         if label_lesions_list != None:
                             list_label_images.append(label_lesions_list)
-                        print(np.shape(list_labels_total_np))
+                            combined_array_lesion = np.vstack((combined_array_lesion, subimage_list))
+                        print(np.shape(combined_array))
+                        print(f'number of lesions: {GLOBAL_LESION_COUNT}')
                         # print(np.shape(combined_array_lesion))
                         # print(np.shape(list_features_total))
                         # print(count_ones_in_sublists(list_labels_total))
@@ -655,7 +609,7 @@ def main():
                         # display_image(clahe_image)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
                         feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
-                        if iteration % 5 == 0 and iteration != 0:
+                        if iteration % 3 == 0:# and iteration != 0:
                             try:
                                 combined_array = np.vstack((combined_array, feature_list))
                                 list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
@@ -664,12 +618,14 @@ def main():
                             except:
                                     print('dimension issues. Just do not use that data')
                         # list_features_total.append(np.array(feature_list))
-                        if subimage_list != None:
-                            # list_images_lesion.append(np.array(subimage_list))
-                            combined_array_lesion = np.vstack((combined_array_lesion, subimage_list))
+                        # if len(subimage_list) >= 0:
+                        #     # list_images_lesion.append(np.array(subimage_list))
+                            
                         if label_lesions_list != None:
                             list_label_images.append(label_lesions_list)
-                        print(np.shape(list_labels_total_np))
+                            combined_array_lesion = np.vstack((combined_array_lesion, subimage_list))
+                        print(np.shape(combined_array))
+                        print(f'number of lesions: {GLOBAL_LESION_COUNT}')
                         # print(np.shape(combined_array))
                         # print(count_ones_in_sublists(list_label_images))
                         # print(count_ones_in_sublists(label_list))
