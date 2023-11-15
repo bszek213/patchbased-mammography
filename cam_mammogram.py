@@ -648,7 +648,7 @@ def main():
 
         array_lesion = np.array(list_ones, dtype="int") #here is the problem
         # array_non_lesion = np.array(label_list,  dtype="int")
-        labels = tf.keras.utils.to_categorical(np.concatenate((list_labels_total_np, array_lesion)), num_classes=3, dtype="int")
+        labels = tf.keras.utils.to_categorical(np.concatenate((list_labels_total_np, array_lesion)), num_classes=2, dtype="int")
         
         # for sublist in list_features_total_adj:
         #     print(np.shape(sublist))
