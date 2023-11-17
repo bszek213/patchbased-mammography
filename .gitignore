@@ -25,6 +25,8 @@ X_test.npy
 X_train.npy
 y_test.npy
 y_train.npy
+X_validation.npy
+y_validation.npy
 
 patch_DenseNet121.h5
 # C extensions

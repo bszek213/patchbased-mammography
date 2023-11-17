@@ -1,13 +1,15 @@
 #CAM MAMMOGRAM
-# from tensorflow.keras.applications.resnet_v2 import ResNet152V2
-from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D, GlobalAveragePooling2D, Dense
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, GlobalAveragePooling2D, Dense, Concatenate
-from tensorflow.keras.models import Model
+from tensorflow.keras.applications.resnet_v2 import ResNet152V2
+# from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D, GlobalAveragePooling2D, Dense
+# from tensorflow.keras.models import Model
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense#, Input, Concatenate
+# from tensorflow.keras.models import Model
 from tensorflow.keras.applications import DenseNet121
-from keras.applications.vgg16 import VGG16
-from keras.layers import Dense, Dropout, Flatten, BatchNormalization
-import tensorflow as tf
+# from keras.applications.vgg16 import VGG16
+# from keras.layers import Dense#, Dropout, Flatten, BatchNormalization
+# import tensorflow as tf
+from tensorflow.keras.losses import BinaryFocalCrossentropy
+from tensorflow.keras.utils import to_categorical
 from keras.models import Sequential
 import matplotlib.pyplot as plt
 import pydicom
@@ -19,11 +21,13 @@ from pandas import read_csv
 # from patchify import patchify
 # from np_utils import to_categorical
 from sklearn.model_selection import train_test_split
-from statistics import mode
+# from statistics import mode
 # import pickle
 from skimage.util import view_as_windows
-from tensorflow.keras.models import save_model, load_model
-from tensorflow.keras.metrics import F1Score
+from tensorflow.keras.models import save_model#, load_model
+# from tensorflow.keras.metrics import F1Score
+from tensorflow.keras.callbacks import EarlyStopping
+
 # from pandas import DataFrame
 # from itertools import chain
 """
@@ -169,11 +173,11 @@ def clahe(image):
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
-def create_patch_model(input_shape):
+def create_patch_model_dense(input_shape):
     """
     input shape = (250,250,3,12)
     """
-    input_layer = Input(shape=input_shape)
+    # input_layer = Input(shape=input_shape)
     # rgb_input = Concatenate()([input_layer, input_layer, input_layer])
     base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
     # base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
@@ -199,30 +203,47 @@ def create_patch_model(input_shape):
     # patch_model = Model(inputs=base_model.input, outputs=outputs)
     return model
 
-def create_global_model(num_rows,num_columns):
-    # Input shape for each patch (1 channel for grayscale)
-    patch_input_shape = (*PATCH_SIZE, 1)
+def create_patch_model_res(input_shape):
+    """
+    input shape = (250,250,3,12)
+    """
+    # input_layer = Input(shape=input_shape)
+    # rgb_input = Concatenate()([input_layer, input_layer, input_layer])
+    base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    # base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    model = Sequential()
+    model.add(base_model)
+    model.add(GlobalAveragePooling2D())
+    model.add(Dense(2, activation="softmax"))
+    model.compile(loss=BinaryFocalCrossentropy(), optimizer='adam', 
+                  metrics=['accuracy'])
+    model.summary()
+    return model
 
-    # Create a list of patch models
-    patch_models = [create_patch_model(patch_input_shape) for _ in range(num_rows * num_columns)]
+# def create_global_model(num_rows,num_columns):
+#     # Input shape for each patch (1 channel for grayscale)
+#     patch_input_shape = (*PATCH_SIZE, 1)
 
-    # Input shape for the global model
-    global_input_shape = (num_rows, num_columns, *patch_input_shape)
+#     # Create a list of patch models
+#     patch_models = [create_patch_model(patch_input_shape) for _ in range(num_rows * num_columns)]
 
-    # Create a global model that takes a grid of patches as input
-    global_input = Input(shape=global_input_shape)
-    patch_inputs = tf.split(global_input, num_rows * num_columns, axis=(0, 1))
+#     # Input shape for the global model
+#     global_input_shape = (num_rows, num_columns, *patch_input_shape)
 
-    outputs = [patch_models[i](patch_inputs[i]) for i in range(num_rows * num_columns)]
+#     # Create a global model that takes a grid of patches as input
+#     global_input = Input(shape=global_input_shape)
+#     patch_inputs = tf.split(global_input, num_rows * num_columns, axis=(0, 1))
 
-    # Flatten the patch results and classify globally
-    x = tf.concat(outputs, axis=1)
-    global_output = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
+#     outputs = [patch_models[i](patch_inputs[i]) for i in range(num_rows * num_columns)]
 
-    global_model = Model(inputs=global_input, outputs=global_output)
-    global_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+#     # Flatten the patch results and classify globally
+#     x = tf.concat(outputs, axis=1)
+#     global_output = Dense(2, activation='softmax')(x)  # Two classes: benign and malignant
 
-    return global_model
+#     global_model = Model(inputs=global_input, outputs=global_output)
+#     global_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+#     return global_model
 
 # def resNet152_baseline():
 #     optimizer = tf.keras.optimizers.Nadam(learning_rate=0.001, beta_1=0.9,beta_2=0.999)
@@ -316,7 +337,7 @@ def patch(image,list_mass,GLOBAL_LESION_COUNT):
                 # all_images[i,j] = [sample_patch,1]
             #tissue images
             else:
-                all_images[i,j] = [sample_patch,2]
+                all_images[i,j] = [sample_patch,0]
     #FIND THE SUBIMAGES OF THE LESIONS
     center_x = (list_mass[0] + list_mass[1]) // 2
     center_y = (list_mass[2] + list_mass[3]) // 2
@@ -575,7 +596,7 @@ def main():
                         dict_save_benign[index] = [row['view_position'],row['breast_birads']]   
                         # dict_image_benign[index] = patch(clahe_image)
                         feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT  = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
-                        if iteration % 3 == 0:# and iteration != 0:
+                        if iteration % 2 == 0:# and iteration != 0:
                             try:
                                 combined_array = np.vstack((combined_array, feature_list))
                                 list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
@@ -609,7 +630,7 @@ def main():
                         # display_image(clahe_image)
                         dict_save_malig[index] = [row['view_position'],row['breast_birads']]
                         feature_list, subimage_list, label_list, label_lesions_list, GLOBAL_LESION_COUNT = patch(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']],GLOBAL_LESION_COUNT)
-                        if iteration % 3 == 0:# and iteration != 0:
+                        if iteration % 2 == 0:# and iteration != 0:
                             try:
                                 combined_array = np.vstack((combined_array, feature_list))
                                 list_labels_total_np = np.concatenate((list_labels_total_np, np.array(label_list)))
@@ -648,7 +669,8 @@ def main():
 
         array_lesion = np.array(list_ones, dtype="int") #here is the problem
         # array_non_lesion = np.array(label_list,  dtype="int")
-        labels = tf.keras.utils.to_categorical(np.concatenate((list_labels_total_np, array_lesion)), num_classes=2, dtype="int")
+        labels = to_categorical(np.concatenate((list_labels_total_np, array_lesion)), 
+                                               num_classes=2, dtype="int")
         
         # for sublist in list_features_total_adj:
         #     print(np.shape(sublist))
@@ -661,20 +683,31 @@ def main():
         # features = np.concatenate((np_image_non_lesion,np_image_lesion))
         print(np.shape(features))
         print(np.shape(labels))
-        X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+        X_train, X_temp, y_train, y_temp = train_test_split(features, labels, test_size=0.4, random_state=42)
+        X_validation, X_test, y_validation, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+
+        # Save the data
         np.save('X_train.npy', X_train)
+        np.save('X_validation.npy', X_validation)
         np.save('X_test.npy', X_test)
         np.save('y_train.npy', y_train)
+        np.save('y_validation.npy', y_validation)
         np.save('y_test.npy', y_test)
+
     else:
         X_train = np.load('X_train.npy')
         X_test = np.load('X_test.npy')
         y_train = np.load('y_train.npy')
         y_test = np.load('y_test.npy')
+        x_val = np.load('X_validation.npy')
+        y_val = np.load('y_validation.npy')
+
     print(f'x_train size {np.shape(X_train)}')
     print(f'X_test size {np.shape(X_test)}')
     print(f'y_train size {np.shape(y_train)}')
     print(f'y_test size {np.shape(y_test)}')
+    print(f'x_val size {np.shape(x_val)}')
+    print(f'y_val size {np.shape(y_val)}')
 
     #label counts
     label_counts = np.sum(y_train, axis=0)
@@ -688,12 +721,15 @@ def main():
     # X_train = np.concatenate([X_train, X_train, X_train], axis=-1)
     # X_test = np.concatenate([X_test, X_test, X_test], axis=-1)
     #train model
-    patch_architecture = create_patch_model((GLOBAL_X,GLOBAL_Y,3))
+    patch_architecture_dense = create_patch_model_dense((GLOBAL_X,GLOBAL_Y,3))
     plt.figure(figsize=(15, 8))
     previous_val_acc = 0
-    for i in range(5):
-        history = patch_architecture.fit(X_train, y_train, epochs=10, batch_size=64,
-                                        validation_data=(X_test, y_test), verbose=1)
+    early_stopping = EarlyStopping(monitor='val_accuracy', patience=3, restore_best_weights=True)
+
+    print('Train denseNet')
+    for i in range(0):
+        history = patch_architecture_dense.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
+                                        validation_data=(x_val, y_val), verbose=1)
 
         plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
         plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
@@ -712,12 +748,53 @@ def main():
         plt.ylabel('Loss')
         plt.legend()
         if history.history['val_accuracy'][-1] > previous_val_acc:
-            save_patch_model = patch_architecture
+            save_patch_model = patch_architecture_dense
             print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
 
     plt.tight_layout()  # Adjust subplot spacing for better appearance
     plt.savefig('training_accuracy_loss_DenseNet.png', dpi=400)
+    test_results = patch_architecture_dense.evaluate(X_test, y_test)
+    print(f'Test Accuracy: {test_results[1]}')
+    print(f'Test Loss: {test_results[0]}')
+    with open('test_results_dense.txt', 'w') as file:
+        file.write(f'Test Accuracy: {test_results[1]}\n')
+        file.write(f'Test Loss: {test_results[0]}\n')
     save_model(save_patch_model,'patch_DenseNet121.h5')
+
+    print('Train ResNet')
+    previous_val_acc = 0
+    patch_architecture_res = create_patch_model_res((GLOBAL_X,GLOBAL_Y,3))
+    for i in range(0):
+        history = patch_architecture_res.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
+                                        validation_data=(x_val, y_val), verbose=1)
+
+        plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
+        plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
+        plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
+        #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
+        plt.title('ResNet152 Baseline Model Accuracy History')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend()
+
+        plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
+        plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
+        plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
+        plt.title('ResNet152 Baseline Model Loss History')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        if history.history['val_accuracy'][-1] > previous_val_acc:
+            save_patch_model = patch_architecture_res
+            print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
+
+    plt.tight_layout()  # Adjust subplot spacing for better appearance
+    plt.savefig('training_accuracy_loss_ResNet152.png', dpi=400)
+    test_results = patch_architecture_res.evaluate(X_test, y_test)
+    with open('test_results_res.txt', 'w') as file:
+        file.write(f'Test Accuracy: {test_results[1]}\n')
+        file.write(f'Test Loss: {test_results[0]}\n')
+    save_model(save_patch_model,'patch_ResNet152.h5')
 
     # global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
     # history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
