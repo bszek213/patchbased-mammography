@@ -727,7 +727,7 @@ def main():
     early_stopping = EarlyStopping(monitor='val_accuracy', patience=3, restore_best_weights=True)
 
     print('Train denseNet')
-    for i in range(0):
+    for i in range(1):
         history = patch_architecture_dense.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
                                         validation_data=(x_val, y_val), verbose=1)
 
@@ -764,7 +764,7 @@ def main():
     print('Train ResNet')
     previous_val_acc = 0
     patch_architecture_res = create_patch_model_res((GLOBAL_X,GLOBAL_Y,3))
-    for i in range(0):
+    for i in range(1):
         history = patch_architecture_res.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
                                         validation_data=(x_val, y_val), verbose=1)
 
