@@ -727,8 +727,7 @@ def main():
     early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
     print('Train denseNet')
-    if not exists('patch_DenseNet.h5'):
-
+    if not exists('patch_DenseNet121.h5'):
         for i in range(1):
             history = patch_architecture_dense.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
                                         validation_data=(x_val, y_val), verbose=1)
@@ -763,40 +762,41 @@ def main():
             file.write(f'Test Loss: {test_results[0]}\n')
         save_model(save_patch_model,'patch_DenseNet121.h5')
 
-    print('Train ResNet')
-    previous_val_acc = 0
-    patch_architecture_res = create_patch_model_res((GLOBAL_X,GLOBAL_Y,3))
-    for i in range(1):
-        history = patch_architecture_res.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
-                                        validation_data=(x_val, y_val), verbose=1)
+    if not exists('patch_ResNet152.h5'):
+        print('Train ResNet')
+        previous_val_acc = 0
+        patch_architecture_res = create_patch_model_res((GLOBAL_X,GLOBAL_Y,3))
+        for i in range(1):
+            history = patch_architecture_res.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
+                                            validation_data=(x_val, y_val), verbose=1)
 
-        plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
-        plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
-        plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
-        #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
-        plt.title('ResNet152 Baseline Model Accuracy History')
-        plt.xlabel('Epoch')
-        plt.ylabel('Accuracy')
-        plt.legend()
+            plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
+            plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
+            plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
+            #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
+            plt.title('ResNet152 Baseline Model Accuracy History')
+            plt.xlabel('Epoch')
+            plt.ylabel('Accuracy')
+            plt.legend()
 
-        plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
-        plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
-        plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-        plt.title('ResNet152 Baseline Model Loss History')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.legend()
-        if history.history['val_accuracy'][-1] > previous_val_acc:
-            save_patch_model = patch_architecture_res
-            print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
+            plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
+            plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
+            plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
+            plt.title('ResNet152 Baseline Model Loss History')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.legend()
+            if history.history['val_accuracy'][-1] > previous_val_acc:
+                save_patch_model = patch_architecture_res
+                print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
 
-    plt.tight_layout()  # Adjust subplot spacing for better appearance
-    plt.savefig('training_accuracy_loss_ResNet152.png', dpi=400)
-    test_results = patch_architecture_res.evaluate(X_test, y_test)
-    with open('test_results_res.txt', 'w') as file:
-        file.write(f'Test Accuracy: {test_results[1]}\n')
-        file.write(f'Test Loss: {test_results[0]}\n')
-    save_model(save_patch_model,'patch_ResNet152.h5')
+        plt.tight_layout()  # Adjust subplot spacing for better appearance
+        plt.savefig('training_accuracy_loss_ResNet152.png', dpi=400)
+        test_results = patch_architecture_res.evaluate(X_test, y_test)
+        with open('test_results_res.txt', 'w') as file:
+            file.write(f'Test Accuracy: {test_results[1]}\n')
+            file.write(f'Test Loss: {test_results[0]}\n')
+        save_model(save_patch_model,'patch_ResNet152.h5')
 
     # global_model = create_global_model(int(mode(row_list)),int(mode(col_list)))
     # history = global_model.fit(X_train, y_train, epochs=100, batch_size=2,
