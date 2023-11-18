@@ -29,6 +29,7 @@ X_validation.npy
 y_validation.npy
 
 patch_DenseNet121.h5
+patch_ResNet152.h5
 # C extensions
 *.so
 
