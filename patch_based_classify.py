@@ -328,6 +328,7 @@ def create_patch_model_dense(input_shape):
     model.compile(loss='categorical_crossentropy', optimizer='adam', 
                   metrics=['accuracy'])
     model.summary()
+    return model
 
 def main():
     if not exists('X_train.npy'):
@@ -399,13 +400,13 @@ def main():
     print(f'y_test size {np.shape(y_test)}')
     print(f'x_val size {np.shape(x_val)}')
     print(f'y_val size {np.shape(y_val)}')
-    patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
+
     plt.figure(figsize=(15, 8))
     previous_val_acc = 0
     early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-
     print('Train denseNet')
     if not exists('patch_DenseNet121_small_patch.h5'):
+        patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
         for i in range(1):
             history = patch_architecture_dense.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
                                         validation_data=(x_val, y_val), verbose=1)
