@@ -302,7 +302,7 @@ def create_patch_model_res(input_shape):
     """
     # input_layer = Input(shape=input_shape)
     # rgb_input = Concatenate()([input_layer, input_layer, input_layer])
-    base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    base_model = ResNet152V2(include_top=False, weights='imagenet', input_shape=(int(WINDOW_SIZE/2), int(WINDOW_SIZE/2), 3))
     # base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
     model = Sequential()
     model.add(base_model)
@@ -319,7 +319,7 @@ def create_patch_model_dense(input_shape):
     """
     # input_layer = Input(shape=input_shape)
     # rgb_input = Concatenate()([input_layer, input_layer, input_layer])
-    base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(GLOBAL_X, GLOBAL_Y, 3))
+    base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(int(WINDOW_SIZE/2), int(WINDOW_SIZE/2), 3))
     # base_model = VGG16(weights='imagenet', include_top=False, input_shape=(GLOBAL_X, GLOBAL_Y, 3))
     model = Sequential()
     model.add(base_model)
