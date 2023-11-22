@@ -29,12 +29,13 @@ from tensorflow.keras.models import save_model#, load_model
 from tensorflow.keras.callbacks import EarlyStopping
 from os.path import exists
 from math import sqrt
-from seaborn import histplot
+# from seaborn import histplot
 from random import uniform
-import matplotlib.patches as patches
-from skimage.metrics import structural_similarity as ssim
+# import matplotlib.patches as patches
+# from skimage.metrics import structural_similarity as ssim
 # from pandas import DataFrame
 # from itertools import chain
+from sys import argv
 """
 BIRADS Categories
 
@@ -52,7 +53,13 @@ Category 5: Highly suggestive of malignancy - The findings are highly suspicious
 
 Category 6: Known biopsy-proven malignancy - The cancer has already been confirmed through a biopsy.
 """
-WINDOW_SIZE = 222
+if argv[1] == 'small':
+    WINDOW_SIZE = 222
+elif argv[1] == 'medium':
+    WINDOW_SIZE = 344
+elif argv[1] == 'large':
+    WINDOW_SIZE = 522
+
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
     df = read_csv(os.path.join(path,"finding_annotations.csv"))
     df['breast_birads'] = df['breast_birads'].str.replace('BI-RADS ', '')
@@ -452,7 +459,7 @@ def main():
             plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
             plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
             plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-            plt.title('ResNet152 Baseline Model Loss History')
+            plt.title('ResNet152 Baseline Model Loss History Small Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.legend()
