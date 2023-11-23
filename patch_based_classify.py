@@ -403,12 +403,12 @@ def main():
 
     plt.figure(figsize=(15, 8))
     previous_val_acc = 0
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
     print('Train denseNet')
     if not exists('patch_DenseNet121_small_patch.h5'):
         patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
         for i in range(1):
-            history = patch_architecture_dense.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
+            history = patch_architecture_dense.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping],
                                         validation_data=(x_val, y_val), verbose=1)
 
             plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
@@ -445,7 +445,7 @@ def main():
         previous_val_acc = 0
         patch_architecture_res = create_patch_model_res((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
         for i in range(1):
-            history = patch_architecture_res.fit(X_train, y_train, epochs=50, batch_size=64,callbacks=[early_stopping],
+            history = patch_architecture_res.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping],
                                             validation_data=(x_val, y_val), verbose=1)
 
             plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot

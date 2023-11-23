@@ -724,7 +724,7 @@ def main():
     patch_architecture_dense = create_patch_model_dense((GLOBAL_X,GLOBAL_Y,3))
     plt.figure(figsize=(15, 8))
     previous_val_acc = 0
-    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
     print('Train denseNet')
     if not exists('patch_DenseNet121.h5'):
