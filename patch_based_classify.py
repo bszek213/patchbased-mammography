@@ -377,7 +377,7 @@ def create_patch_model_dense(input_shape):
     return model
 
 def main():
-    if not exists('X_train.npy'):
+    if not exists(f'X_train_{append_name}.npy'):
         glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
         df = read_df()
         df.dropna(inplace=True)
