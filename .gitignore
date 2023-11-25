@@ -21,18 +21,11 @@ classifier_rf.pkl
 api_key.yaml
 
 #data
-X_test.npy
-X_train.npy
-y_test.npy
-y_train.npy
-X_validation.npy
-y_validation.npy
+*.npy
 
-patch_DenseNet121.h5
-patch_ResNet152.h5
-patch_DenseNet121_small_patch.h5
-patch_ResNet152_small_patch.h5
-patch_ResNet152_small_patches.h5
+#models
+*.h5
+
 # C extensions
 *.so
 

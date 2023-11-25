@@ -55,10 +55,13 @@ Category 6: Known biopsy-proven malignancy - The cancer has already been confirm
 """
 if argv[1] == 'small':
     WINDOW_SIZE = 222
+    append_name = 'small'
 elif argv[1] == 'medium':
     WINDOW_SIZE = 344
+    append_name = 'medium'
 elif argv[1] == 'large':
     WINDOW_SIZE = 522
+    append_name = 'large'
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
     df = read_csv(os.path.join(path,"finding_annotations.csv"))
@@ -192,7 +195,7 @@ def random_patch_abnormal(image,list_mass):
     list_mass = [int(x) for x in list_mass]
     xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
     #iterate until sampled adequately
-    max_attempts = 20   
+    max_attempts = 25   
     attempt = 0
     saved_patches = []
     while attempt < max_attempts:
@@ -209,32 +212,45 @@ def random_patch_abnormal(image,list_mass):
         # }
 
         #second try
-        if uniform(0, 1) < 0.5:  # 50% chance to sample along x-axis
-            x_low = uniform(xmin, xmax - window_size)
+        # if uniform(0, 1) < 0.5:  # 50% chance to sample along x-axis
+        #     x_low = uniform(xmin, xmax - window_size)
+        #     x_high = x_low + window_size
+        #     y_low = uniform(ymin, ymax)
+        #     y_high = y_low + window_size
+        # else:  # 50% chance to sample along y-axis
+        #     x_low = uniform(xmin, xmax)
+        #     x_high = x_low + window_size
+        #     y_low = uniform(ymin, ymax - window_size)
+        #     y_high = y_low + window_size
+        # x_high = min(xmax, x_high)
+        # y_high = min(ymax, y_high) 
+        x_low = uniform(xmin, xmax)
+        if uniform(0, 1) < 0.5:
+            x_high = x_low - window_size
+        else:
             x_high = x_low + window_size
-            y_low = uniform(ymin, ymax)
+        y_low = uniform(ymin, ymax)
+        if uniform(0, 1) < 0.5:
             y_high = y_low + window_size
-        else:  # 50% chance to sample along y-axis
-            x_low = uniform(xmin, xmax)
-            x_high = x_low + window_size
-            y_low = uniform(ymin, ymax - window_size)
-            y_high = y_low + window_size
-        x_high = min(xmax, x_high)
-        y_high = min(ymax, y_high) 
+        else:
+            y_high = y_low - window_size
+
         patch = {
             'box': (max(xmin, x_low), max(ymin, y_low), x_high, y_high),
             'data': image[int(max(ymin, y_low)):int(y_high), int(max(xmin, x_low)):int(x_high)]
         }
-        plt.imshow(image, cmap='gray')
 
-        xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
-        bounding_box = patches.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, linewidth=1, edgecolor='r', facecolor='none')
-        plt.gca().add_patch(bounding_box)
-        box = patch['box']
-        rect = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=1, edgecolor='g', facecolor='none')
-        plt.gca().add_patch(rect)
-        plt.show()
-
+        #plot to check
+        # plt.imshow(image, cmap='gray')
+        # xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
+        # #the lesion
+        # bounding_box = patches.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, linewidth=1, edgecolor='r', facecolor='none')
+        # plt.gca().add_patch(bounding_box)
+        # box = patch['box']
+        # #the sampled patch
+        # rect = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=1, edgecolor='y', facecolor='none')
+        # plt.gca().add_patch(rect)
+        # plt.show()
 
         if len(saved_patches) > 0:
             if not is_similar(patch, saved_patches):
@@ -287,7 +303,7 @@ def random_patch_normal(image,list_mass):
 def is_similar(patch, existing_patches):
     for existing_patch in existing_patches:
         iou_score = calculate_iou(existing_patch['box'], patch['box'])
-        if iou_score < 0.90:
+        if iou_score > 0.90:
             return True
     return False
 
@@ -397,15 +413,15 @@ def main():
         features = np.concatenate((combined_array_non_lesion_updated,combined_array_lesion), axis=0)
 
         X_train, X_temp, y_train, y_temp = train_test_split(features, labels, test_size=0.4, random_state=42)
-        X_validation, X_test, y_validation, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+        x_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
 
         # Save the data
-        np.save('X_train.npy', X_train)
-        np.save('X_validation.npy', X_validation)
-        np.save('X_test.npy', X_test)
-        np.save('y_train.npy', y_train)
-        np.save('y_validation.npy', y_validation)
-        np.save('y_test.npy', y_test)
+        np.save(f'X_train_{append_name}.npy', X_train)
+        np.save(f'X_validation_{append_name}.npy', x_val)
+        np.save(f'X_test_{append_name}.npy', X_test)
+        np.save(f'y_train_{append_name}.npy', y_train)
+        np.save(f'y_validation_{append_name}.npy', y_val)
+        np.save(f'y_test_{append_name}.npy', y_test)
 
         #THIS PART IS DONE
         # #create small medium and large patches
@@ -417,12 +433,12 @@ def main():
         # plt.savefig('hist_sizes_lesions.png',dpi=350)
         # plt.close()
     else:
-        X_train = np.load('X_train.npy')
-        X_test = np.load('X_test.npy')
-        y_train = np.load('y_train.npy')
-        y_test = np.load('y_test.npy')
-        x_val = np.load('X_validation.npy')
-        y_val = np.load('y_validation.npy')
+        X_train = np.load(f'X_train_{append_name}.npy')
+        X_test = np.load(f'X_test_{append_name}.npy')
+        y_train = np.load(f'y_train_{append_name}.npy')
+        y_test = np.load(f'y_test_{append_name}.npy')
+        x_val = np.load(f'X_validation_{append_name}.npy')
+        y_val = np.load(f'y_validation_{append_name}.npy')
 
     print(f'x_train size {np.shape(X_train)}')
     print(f'X_test size {np.shape(X_test)}')
@@ -435,7 +451,7 @@ def main():
     previous_val_acc = 0
     early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
     print('Train denseNet')
-    if not exists('patch_DenseNet121_small_patch.h5'):
+    if not exists(f'patch_DenseNet121_{append_name}_patch.h5'):
         patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
         for i in range(1):
             history = patch_architecture_dense.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping],
@@ -445,7 +461,7 @@ def main():
             plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
             plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
             #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
-            plt.title('DenseNet Baseline Model Accuracy History')
+            plt.title(f'DenseNet Baseline Model Accuracy History {append_name} Patches ')
             plt.xlabel('Epoch')
             plt.ylabel('Accuracy')
             plt.legend()
@@ -453,7 +469,7 @@ def main():
             plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
             plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
             plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-            plt.title('Densenet Baseline Model Loss History Small Patches')
+            plt.title(f'Densenet Baseline Model Loss History {append_name} Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.legend()
@@ -461,16 +477,16 @@ def main():
                 save_patch_model = patch_architecture_dense
                 print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
         plt.tight_layout()  # Adjust subplot spacing for better appearance
-        plt.savefig('training_accuracy_loss_DenseNet_small_patch.png', dpi=400)
+        plt.savefig(f'training_accuracy_loss_DenseNet_{append_name}_patch.png', dpi=400)
         test_results = patch_architecture_dense.evaluate(X_test, y_test)
         print(f'Test Accuracy: {test_results[1]}')
         print(f'Test Loss: {test_results[0]}')
-        with open('test_results_dense.txt', 'w') as file:
+        with open(f'test_results_dense_{append_name}.txt', 'w') as file:
             file.write(f'Test Accuracy: {test_results[1]}\n')
             file.write(f'Test Loss: {test_results[0]}\n')
-        save_model(save_patch_model,'patch_DenseNet121_small_patch.h5')
+        save_model(save_patch_model,f'patch_DenseNet121_{append_name}_patch.h5')
 
-    if not exists('patch_ResNet152_small_patch.h5'):
+    if not exists(f'patch_ResNet152_{append_name}_patch.h5'):
         print('Train ResNet')
         previous_val_acc = 0
         patch_architecture_res = create_patch_model_res((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
@@ -482,7 +498,7 @@ def main():
             plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
             plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
             #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
-            plt.title('ResNet152 Baseline Model Accuracy History Small Patches')
+            plt.title(f'ResNet152 Baseline Model Accuracy History {append_name} Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Accuracy')
             plt.legend()
@@ -490,7 +506,7 @@ def main():
             plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
             plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
             plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-            plt.title('ResNet152 Baseline Model Loss History Small Patches')
+            plt.title(f'ResNet152 Baseline Model Loss History {append_name} Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.legend()
@@ -499,13 +515,12 @@ def main():
                 print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
 
         plt.tight_layout()  # Adjust subplot spacing for better appearance
-        plt.savefig('training_accuracy_loss_ResNet152_small_patches.png', dpi=400)
+        plt.savefig(f'training_accuracy_loss_ResNet152_{append_name}_patches.png', dpi=400)
         test_results = patch_architecture_res.evaluate(X_test, y_test)
-        with open('test_results_res.txt', 'w') as file:
+        with open(f'test_results_res_{append_name}.txt', 'w') as file:
             file.write(f'Test Accuracy: {test_results[1]}\n')
             file.write(f'Test Loss: {test_results[0]}\n')
-        save_model(save_patch_model,'patch_ResNet152_small_patches.h5')
+        save_model(save_patch_model,f'patch_ResNet152_{append_name}_patches.h5')
 
-    
 if __name__ == "__main__":
     main()
