@@ -31,7 +31,7 @@ from os.path import exists
 from math import sqrt
 # from seaborn import histplot
 from random import uniform
-# import matplotlib.patches as patches
+import matplotlib.patches as patches
 # from skimage.metrics import structural_similarity as ssim
 # from pandas import DataFrame
 # from itertools import chain
@@ -196,16 +196,46 @@ def random_patch_abnormal(image,list_mass):
     attempt = 0
     saved_patches = []
     while attempt < max_attempts:
-        x_low = uniform(xmin, xmax - window_size)
-        x_high = x_low + window_size
-        y_low = uniform(ymin, ymax - window_size)
-        y_high = y_low + window_size
-        # print(f'uniform estimation: {int(y_low),int(y_high), int(x_low), int(x_high)}')
-        patch = image[int(y_low):int(y_high), int(x_low):int(x_high)]
+        #first attempt
+        # x_low = uniform(xmin, xmax - window_size)
+        # x_high = x_low + window_size
+        # y_low = uniform(ymin, ymax - window_size)
+        # y_high = y_low + window_size
+        # # print(f'uniform estimation: {int(y_low),int(y_high), int(x_low), int(x_high)}')
+        # patch = image[int(y_low):int(y_high), int(x_low):int(x_high)]
+        # patch = {
+        #     'box': (x_low, y_low, x_high, y_high),
+        #     'data': image[int(y_low):int(y_high), int(x_low):int(x_high)]
+        # }
+
+        #second try
+        if uniform(0, 1) < 0.5:  # 50% chance to sample along x-axis
+            x_low = uniform(xmin, xmax - window_size)
+            x_high = x_low + window_size
+            y_low = uniform(ymin, ymax)
+            y_high = y_low + window_size
+        else:  # 50% chance to sample along y-axis
+            x_low = uniform(xmin, xmax)
+            x_high = x_low + window_size
+            y_low = uniform(ymin, ymax - window_size)
+            y_high = y_low + window_size
+        x_high = min(xmax, x_high)
+        y_high = min(ymax, y_high) 
         patch = {
-            'box': (x_low, y_low, x_high, y_high),
-            'data': image[int(y_low):int(y_high), int(x_low):int(x_high)]
+            'box': (max(xmin, x_low), max(ymin, y_low), x_high, y_high),
+            'data': image[int(max(ymin, y_low)):int(y_high), int(max(xmin, x_low)):int(x_high)]
         }
+        plt.imshow(image, cmap='gray')
+
+        xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
+        bounding_box = patches.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, linewidth=1, edgecolor='r', facecolor='none')
+        plt.gca().add_patch(bounding_box)
+        box = patch['box']
+        rect = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=1, edgecolor='g', facecolor='none')
+        plt.gca().add_patch(rect)
+        plt.show()
+
+
         if len(saved_patches) > 0:
             if not is_similar(patch, saved_patches):
                 # Save the patch
