@@ -1,6 +1,7 @@
 #CAM MAMMOGRAM
 from tensorflow.keras.applications.resnet_v2 import ResNet152V2
 from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import L2
 # from tensorflow.keras.models import Model
 from tensorflow.keras import layers
@@ -433,6 +434,8 @@ def create_patch_custom_model():
     model.add(layers.Dense(2, activation='softmax', kernel_regularizer=L2(0.0002)))
 
     # Print model summary
+    model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.001), 
+                  metrics=['accuracy'])
     model.summary()
 
     return model 
