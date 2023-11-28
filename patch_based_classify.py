@@ -1,6 +1,6 @@
 #CAM MAMMOGRAM
 from tensorflow.keras.applications.resnet_v2 import ResNet152V2
-from tensorflow.keras.layers import models, GlobalAveragePooling2D, Dense
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
 from tensorflow.keras.regularizers import L2
 # from tensorflow.keras.models import Model
 from tensorflow.keras import layers
