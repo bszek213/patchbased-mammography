@@ -3,7 +3,7 @@ from tensorflow.keras.applications.resnet_v2 import ResNet152V2
 from tensorflow.keras.layers import models, GlobalAveragePooling2D, Dense
 from tensorflow.keras.regularizers import L2
 # from tensorflow.keras.models import Model
-from tensorflow.keras import layers, models
+from tensorflow.keras import layers
 from tensorflow.keras.layers import GlobalAveragePooling2D, Dense#, Input, Concatenate
 # from tensorflow.keras.models import Model
 from tensorflow.keras.applications import DenseNet121
@@ -380,7 +380,7 @@ def create_patch_model_dense(input_shape):
 
 def create_patch_custom_model():
     #Define the CNN model
-    model = models.Sequential()
+    model = Sequential()
 
     #Input layer
     model.add(layers.InputLayer(input_shape=(int(WINDOW_SIZE/2), int(WINDOW_SIZE/2), 3)))
