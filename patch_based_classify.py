@@ -449,7 +449,7 @@ def main():
 
     plt.figure(figsize=(15, 8))
     previous_val_acc = 0
-    early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
     print('Train denseNet')
     if not exists(f'patch_DenseNet121_{append_name}_patch.h5'):
         patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
