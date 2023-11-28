@@ -1,7 +1,9 @@
 #CAM MAMMOGRAM
 from tensorflow.keras.applications.resnet_v2 import ResNet152V2
-# from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D, GlobalAveragePooling2D, Dense
+from tensorflow.keras.layers import models, GlobalAveragePooling2D, Dense
+from tensorflow.keras.regularizers import L2
 # from tensorflow.keras.models import Model
+from tensorflow.keras import layers, models
 from tensorflow.keras.layers import GlobalAveragePooling2D, Dense#, Input, Concatenate
 # from tensorflow.keras.models import Model
 from tensorflow.keras.applications import DenseNet121
@@ -31,7 +33,7 @@ from os.path import exists
 from math import sqrt
 # from seaborn import histplot
 from random import uniform
-import matplotlib.patches as patches
+# import matplotlib.patches as patches
 # from skimage.metrics import structural_similarity as ssim
 # from pandas import DataFrame
 # from itertools import chain
@@ -376,6 +378,66 @@ def create_patch_model_dense(input_shape):
     model.summary()
     return model
 
+def create_patch_custom_model():
+    #Define the CNN model
+    model = models.Sequential()
+
+    #Input layer
+    model.add(layers.InputLayer(input_shape=(int(WINDOW_SIZE/2), int(WINDOW_SIZE/2), 3)))
+
+    #Convolutional Block 1
+    model.add(layers.ZeroPadding2D(padding=(3, 3)))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu'))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu'))
+    model.add(layers.ZeroPadding2D(padding=(1, 1)))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
+
+    #Convolutional Block 2
+    model.add(layers.Conv2D(64, (1, 1), activation='relu'))
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.ZeroPadding2D(padding=(1, 1)))
+    model.add(layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+
+    #Convolutional Block 3
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.ZeroPadding2D(padding=(1, 1)))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
+
+    #Convolutional Block 4
+    model.add(layers.Conv2D(256, (1, 1), activation='relu'))
+    model.add(layers.Conv2D(256, (3, 3), activation='relu'))
+    model.add(layers.ZeroPadding2D(padding=(1, 1)))
+    model.add(layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+
+    #Convolutional Block 5
+    model.add(layers.Conv2D(512, (3, 3), activation='relu'))
+    model.add(layers.Conv2D(512, (3, 3), activation='relu'))
+    model.add(layers.ZeroPadding2D(padding=(1, 1)))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2), strides=(1, 1)))
+
+    #Convolutional Block 6
+    model.add(layers.Conv2D(1024, (1, 1), activation='relu'))
+    model.add(layers.Conv2D(1024, (3, 3), activation='relu'))
+    model.add(layers.ZeroPadding2D(padding=(1, 1)))
+    model.add(layers.MaxPooling2D(pool_size=(3, 3), strides=(2, 2)))
+
+    #Global Average Pooling and Flatten
+    model.add(layers.GlobalAveragePooling2D())
+    model.add(layers.Flatten())
+
+    #Dropout layer
+    model.add(layers.Dropout(0.5))
+
+    #Dense layer
+    model.add(layers.Dense(2, activation='softmax', kernel_regularizer=L2(0.0002)))
+
+    # Print model summary
+    model.summary()
+
+    return model 
+
+
 def main():
     if not exists(f'X_train_{append_name}.npy'):
         glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
@@ -450,6 +512,44 @@ def main():
     plt.figure(figsize=(15, 8))
     previous_val_acc = 0
     early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+    #Train custom
+    print('Train Custom Architecture')
+    if not exists(f'patch_custom_{append_name}_patch.h5'):
+        previous_val_acc = 0
+        patch_architecture = create_patch_custom_model()
+        for i in range(1):
+            history = patch_architecture.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping],
+                                            validation_data=(x_val, y_val), verbose=1)
+
+            plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
+            plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
+            plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
+            #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
+            plt.title(f'Custom Architecture Model Accuracy History {append_name} Patches')
+            plt.xlabel('Epoch')
+            plt.ylabel('Accuracy')
+            plt.legend()
+
+            plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
+            plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
+            plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
+            plt.title(f'Custom Architecture Model Loss History {append_name} Patches')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.legend()
+            if history.history['val_accuracy'][-1] > previous_val_acc:
+                save_patch_model = patch_architecture
+                print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
+
+        plt.tight_layout()  # Adjust subplot spacing for better appearance
+        plt.savefig(f'training_accuracy_loss_custom_arch_{append_name}_patches.png', dpi=400)
+        test_results = patch_architecture.evaluate(X_test, y_test)
+        with open(f'test_results_custom_arch_{append_name}.txt', 'w') as file:
+            file.write(f'Test Accuracy: {test_results[1]}\n')
+            file.write(f'Test Loss: {test_results[0]}\n')
+        save_model(save_patch_model,f'patch_custom_{append_name}_patch.h5')
+
     print('Train denseNet')
     if not exists(f'patch_DenseNet121_{append_name}_patch.h5'):
         patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
