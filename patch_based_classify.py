@@ -191,7 +191,7 @@ def random_patch_abnormal(image,list_mass):
     Medium (Median): 344
     Large: 522.0
     """
-    window_size = WINDOW_SIZE/2 
+    window_size = WINDOW_SIZE/2
     list_mass = [int(x) for x in list_mass]
     xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
     #iterate until sampled adequately
