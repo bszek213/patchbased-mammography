@@ -12,6 +12,7 @@ from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from skimage.util import view_as_windows
 # from seaborn import kdeplot
+from matplotlib import patches
 
 if argv[1] == 'small':
     WINDOW_SIZE = 112
@@ -150,6 +151,9 @@ def clahe(image):
     clahe_blur = cv2.cvtColor(clahe_blur, cv2.COLOR_GRAY2RGB)   
     clahe_noise = cv2.cvtColor(clahe_noise, cv2.COLOR_GRAY2RGB)  
     # plt.figure()
+    # plt.title('Original')
+    # plt.imshow(A_cv2, cmap='gray')
+    # plt.figure()
     # plt.title(f'Noise + CLAHE')
     # plt.imshow(clahe_noise,cmap='gray')
     # plt.figure()
@@ -227,12 +231,15 @@ def random_patch_abnormal(image,list_mass):
         # plt.imshow(image, cmap='gray')
         # xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
         # #the lesion
-        # bounding_box = patches.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, linewidth=1, edgecolor='r', facecolor='none')
+        # bounding_box = patches.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin, linewidth=1, edgecolor='r', label='lesion',facecolor='none')
         # plt.gca().add_patch(bounding_box)
         # box = patch['box']
         # #the sampled patch
-        # rect = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=1, edgecolor='y', facecolor='none')
+        # rect = patches.Rectangle((box[0], box[1]), box[2] - box[0], box[3] - box[1], linewidth=1, edgecolor='y', label='patch', facecolor='none')
         # plt.gca().add_patch(rect)
+        # plt.tight_layout()
+        # plt.title(f'{argv[1]} window')
+        # plt.legend()
         # plt.show()
 
         if len(saved_patches) > 0:
