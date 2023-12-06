@@ -5,7 +5,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import L2
 # from tensorflow.keras.models import Model
 from tensorflow.keras import layers
-from tensorflow.keras.layers import GlobalAveragePooling2D, Dense#, Input, Concatenate
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout#, Input, Concatenate
 # from tensorflow.keras.models import Model
 from tensorflow.keras.applications import DenseNet121
 # from keras.applications.vgg16 import VGG16
@@ -39,6 +39,8 @@ from random import uniform
 # from pandas import DataFrame
 # from itertools import chain
 from sys import argv
+from keras.regularizers import l2
+
 """
 BIRADS Categories
 
@@ -57,13 +59,13 @@ Category 5: Highly suggestive of malignancy - The findings are highly suspicious
 Category 6: Known biopsy-proven malignancy - The cancer has already been confirmed through a biopsy.
 """
 if argv[1] == 'small':
-    WINDOW_SIZE = 222
+    WINDOW_SIZE = 112
     append_name = 'small'
 elif argv[1] == 'medium':
-    WINDOW_SIZE = 344
+    WINDOW_SIZE = 202
     append_name = 'medium'
 elif argv[1] == 'large':
-    WINDOW_SIZE = 522
+    WINDOW_SIZE = 576
     append_name = 'large'
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
@@ -374,6 +376,9 @@ def create_patch_model_res(input_shape):
     model = Sequential()
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
+    model.add(Dropout(0.2))
+    model.add(Dense(256, activation='relu', kernel_regularizer=l2(1e-4)))
+    model.add(Dropout(0.2))
     model.add(Dense(2, activation="softmax"))
     model.compile(loss=BinaryFocalCrossentropy(), optimizer='adam', 
                   metrics=['accuracy'])
@@ -391,6 +396,9 @@ def create_patch_model_dense(input_shape):
     model = Sequential()
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
+    model.add(Dropout(0.2))
+    model.add(Dense(256, activation='relu', kernel_regularizer=l2(1e-4)))
+    model.add(Dropout(0.2))
     model.add(Dense(2, activation="softmax"))
     model.compile(loss='categorical_crossentropy', optimizer='adam', 
                   metrics=['accuracy'])

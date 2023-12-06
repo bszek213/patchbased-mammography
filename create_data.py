@@ -11,15 +11,16 @@ from random import uniform, sample
 from tensorflow.keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from skimage.util import view_as_windows
+# from seaborn import kdeplot
 
 if argv[1] == 'small':
-    WINDOW_SIZE = 222
+    WINDOW_SIZE = 112
     append_name = 'small'
 elif argv[1] == 'medium':
-    WINDOW_SIZE = 344
+    WINDOW_SIZE = 202
     append_name = 'medium'
 elif argv[1] == 'large':
-    WINDOW_SIZE = 522
+    WINDOW_SIZE = 576
     append_name = 'large'
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
@@ -157,10 +158,14 @@ def clahe(image):
     # plt.show()
     return [clahe_blur, clahe_noise]
 
-def get_lesion_size(list_mass,list_all_values):
+def get_lesion_size(list_mass,list_all_values,image_shape):
     list_mass = [int(x) for x in list_mass]
-    #Euclidean distance
-    list_all_values.append(int(sqrt((list_mass[1] - list_mass[0])**2 + (list_mass[3] - list_mass[2])**2)))
+    x_dist_lesion = list_mass[1] - list_mass[0]
+    y_dist_lesion = list_mass[3] - list_mass[2]
+    #image area calculation
+    list_all_values.append((x_dist_lesion * y_dist_lesion) / (image_shape[0] * image_shape[1]))
+    # #Euclidean distance
+    # list_all_values.append(int(sqrt((list_mass[1] - list_mass[0])**2 + (list_mass[3] - list_mass[2])**2)))
     return list_all_values
 
 def random_patch_abnormal(image,list_mass):
@@ -307,21 +312,44 @@ def calculate_iou(box1, box2):
     return iou
 
 def create_small_medium_large(list_all_values):
-    q1 = int(np.percentile(list_all_values, 25))
-    q2 = int(np.percentile(list_all_values, 50))
-    q3 = int(np.percentile(list_all_values, 75))
-    if q1 % 2 != 0:  # Check if it's odd
-        q1 += 1
-    if q2 % 2 != 0:  # Check if it's odd
-        q2 += 1
-    if q3 % 2 != 0:  # Check if it's odd
-        q3 += 1
-    print(f'number of lesions: {len(list_all_values)}')
+    list_all_values = np.array(list_all_values)
+    q1 = np.percentile(list_all_values, 25)
+    q2 = np.percentile(list_all_values, 50)
+    q3 = np.percentile(list_all_values, 75)
+
+    # if q1 % 2 != 0:  # Check if it's odd
+    #     q1 += 1
+    # if q2 % 2 != 0:  # Check if it's odd
+    #     q2 += 1
+    # if q3 % 2 != 0:  # Check if it's odd
+    #     q3 += 1
+    data_q1 = list_all_values[np.where(list_all_values < q1)[0]]
+    data_between_q1_q2 = list_all_values[np.where((list_all_values >= q1) & (list_all_values < q2))[0]]
+    data_q3 = list_all_values[np.where(list_all_values >= q3)[0]]
+
+    mean_q1, std_q1 = np.mean(data_q1), np.std(data_q1)
+    mean_between_q1_q2, std_between_q1_q2 = np.mean(data_between_q1_q2), np.std(data_between_q1_q2)
+    mean_q3, std_q3 = np.mean(data_q3), np.std(data_q3)
+    
+    categories = ['Small', 'Medium', 'Large']
+    means = [mean_q1, mean_between_q1_q2, mean_q3]
+    stds = [std_q1, std_between_q1_q2, std_q3]
+
+    with open("mean_std_lesions.txt", "w") as file:
+        file.write(f"Small: {mean_q1} +/- {std_q1}\n")
+        file.write(f"Medium (Median): {mean_between_q1_q2} +/- {std_between_q1_q2}\n")
+        file.write(f"Large: {mean_q3} +/- {std_q3}\n")
+    plt.figure()
+    plt.bar(categories, means, yerr=stds, capsize=10, color='blue', alpha=0.7)
+    plt.xlabel('Percentile Ranges')
+    plt.ylabel('Mean +/- Standard Deviation')
+    plt.title('Mean and Standard Deviation for Different Percentile Ranges')
+    plt.savefig('mean_std_percentiles.png',dpi=400)
+    plt.close()
     with open("quartiles.txt", "w") as file:
         file.write(f"Small: {q1}\n")
         file.write(f"Medium (Median): {q2}\n")
         file.write(f"Large: {q3}\n")
-
 def main():
     if not exists(f'X_train_{append_name}.npy'):
         glob_dir = '/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0/images'
@@ -339,17 +367,22 @@ def main():
                     #abnormal images
                     if row['breast_birads'] > 1:
                         clahe_image = clahe(png_file)
-                        list_all_values = get_lesion_size([row['xmin'],row['xmax'],row['ymin'],row['ymax']],list_all_values)
-                        for ind_image in clahe_image:
-                            non_lesion_images = random_patch_normal(ind_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                            lesion_images = random_patch_abnormal(ind_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                            if lesion_images.shape[0] > 0:
-                                ran_select = np.random.choice(non_lesion_images.shape[0], size=lesion_images.shape[0], replace=False)
-                                non_lesion_images = non_lesion_images[ran_select]
-                                selected_arrays.append(lesion_images)
-                                selected_arrays_non_lesion.append(non_lesion_images)
-                            # if non_lesion_images.shape[0] > 0: 
-                            #     selected_arrays_non_lesion.append(non_lesion_images)
+                        # list_all_values = get_lesion_size([row['xmin'],row['xmax'],row['ymin'],row['ymax']],
+                        #                                   list_all_values,clahe_image[0].shape)
+                # if iteration > 9:
+                #     break
+    
+                    for ind_image in clahe_image:
+                        non_lesion_images = random_patch_normal(ind_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                        lesion_images = random_patch_abnormal(ind_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                        if lesion_images.shape[0] > 0:
+                            ran_select = np.random.choice(non_lesion_images.shape[0], size=lesion_images.shape[0], replace=False)
+                            non_lesion_images = non_lesion_images[ran_select]
+                            selected_arrays.append(lesion_images)
+                            selected_arrays_non_lesion.append(non_lesion_images)
+                print(f'percent finished: {(iteration / len(df))*100}')
+                    # if non_lesion_images.shape[0] > 0: 
+                    #     selected_arrays_non_lesion.append(non_lesion_images)
         combined_array_lesion = np.concatenate(selected_arrays, axis=0)
         combined_array_non_lesion = np.concatenate(selected_arrays_non_lesion, axis=0)
         selected_indices = np.random.choice(combined_array_non_lesion.shape[0], size=combined_array_lesion.shape[0], replace=False)
@@ -371,6 +404,28 @@ def main():
         np.save(f'y_train_{append_name}.npy', y_train)
         np.save(f'y_validation_{append_name}.npy', y_val)
         np.save(f'y_test_{append_name}.npy', y_test)
+
+
+
+
+
+        #plot hist
+        # cutoff_small = np.percentile(list_all_values, 25)
+        # cutoff_medium = np.percentile(list_all_values, 50)
+        # cutoff_large = np.percentile(list_all_values, 75)
+        # create_small_medium_large(list_all_values)
+        # plt.figure()
+        # plt.hist(np.array(list_all_values).flatten(), bins='auto', color='tab:blue', density=True)
+        # # kdeplot(Series(list_all_values).to_numpy(), color='red', label='KDE')
+        # plt.axvline(cutoff_small, color='yellow', linestyle='--', linewidth=2, label='Cutoff Small')
+        # plt.axvline(cutoff_medium, color='orange', linestyle='--', linewidth=2, label='Cutoff Medium')
+        # plt.axvline(cutoff_large, color='purple', linestyle='--', linewidth=2, label='Cutoff Large')
+        # plt.xlabel('Proportion')
+        # plt.ylabel('Density')
+        # plt.legend()
+        # plt.xlim([0,0.15])
+        # plt.savefig('hist_sizes_lesion_area.png',dpi=400)
+        # plt.close()
 
 if __name__ == "__main__":
     main()
