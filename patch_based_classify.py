@@ -40,7 +40,8 @@ from random import uniform
 # from itertools import chain
 from sys import argv
 from keras.regularizers import l2
-
+from keras.layers import BatchNormalization
+from keras.callbacks import LearningRateScheduler
 """
 BIRADS Categories
 
@@ -376,8 +377,10 @@ def create_patch_model_res(input_shape):
     model = Sequential()
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
+    model.add(BatchNormalization())
     model.add(Dropout(0.5))
-    model.add(Dense(128, activation='relu', kernel_regularizer=l2(1e-4)))
+    model.add(Dense(64, activation='relu', kernel_regularizer=l2(1e-4)))
+    model.add(BatchNormalization())
     model.add(Dropout(0.5))
     model.add(Dense(2, activation="softmax"))
     model.compile(loss=BinaryFocalCrossentropy(), optimizer='adam', 
@@ -396,8 +399,10 @@ def create_patch_model_dense(input_shape):
     model = Sequential()
     model.add(base_model)
     model.add(GlobalAveragePooling2D())
+    model.add(BatchNormalization())
     model.add(Dropout(0.5))
-    model.add(Dense(128, activation='relu', kernel_regularizer=l2(1e-4)))
+    model.add(Dense(64, activation='relu', kernel_regularizer=l2(1e-4)))
+    model.add(BatchNormalization())
     model.add(Dropout(0.5))
     model.add(Dense(2, activation="softmax"))
     model.compile(loss='categorical_crossentropy', optimizer='adam', 
@@ -466,6 +471,11 @@ def create_patch_custom_model():
 
     return model 
 
+def schedule(epoch, lr):
+    if epoch < 5:
+        return 0.001
+    else:
+        return 0.001 * np.exp(0.1 * (10 - epoch))
 
 def main():
     if not exists(f'X_train_{append_name}.npy'):
@@ -539,10 +549,9 @@ def main():
     print(f'x_val size {np.shape(x_val)}')
     print(f'y_val size {np.shape(y_val)}')
 
-    plt.figure(figsize=(15, 8))
     previous_val_acc = 0
     early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
-
+    lr_scheduler = LearningRateScheduler(schedule)
     #Train custom
     print('Train Custom Architecture')
     if not exists(f'patch_custom_{append_name}_patch.h5'):
@@ -574,6 +583,7 @@ def main():
 
         plt.tight_layout()  # Adjust subplot spacing for better appearance
         plt.savefig(f'training_accuracy_loss_custom_arch_{append_name}_patches.png', dpi=400)
+        plt.close()
         test_results = patch_architecture.evaluate(X_test, y_test)
         with open(f'test_results_custom_arch_{append_name}.txt', 'w') as file:
             file.write(f'Test Accuracy: {test_results[1]}\n')
@@ -583,23 +593,24 @@ def main():
     print('Train denseNet')
     if not exists(f'patch_DenseNet121_{append_name}_patch.h5'):
         patch_architecture_dense = create_patch_model_dense((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
+        plt.figure(figsize=(15, 8))
         for i in range(1):
-            history = patch_architecture_dense.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping],
+            history = patch_architecture_dense.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping,lr_scheduler],
                                         validation_data=(x_val, y_val), verbose=1)
 
             plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
-            plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
-            plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
+            plt.plot(history.history['accuracy'], label=f'Training Accuracy')
+            plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy')
             #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
-            plt.title(f'DenseNet Baseline Model Accuracy History {append_name} Patches ')
+            plt.title(f'DenseNet Accuracy {append_name} Patches ')
             plt.xlabel('Epoch')
             plt.ylabel('Accuracy')
             plt.legend()
 
             plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
-            plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
-            plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-            plt.title(f'Densenet Baseline Model Loss History {append_name} Patches')
+            plt.plot(history.history['loss'], label=f'Training Loss')
+            plt.plot(history.history['val_loss'], label=f'Validation')
+            plt.title(f'Densenet Loss{append_name} Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.legend()
@@ -608,6 +619,7 @@ def main():
                 print(f'({i} iteration) best model: {history.history["val_accuracy"][-1]}')
         plt.tight_layout()  # Adjust subplot spacing for better appearance
         plt.savefig(f'training_accuracy_loss_DenseNet_{append_name}_patch.png', dpi=400)
+        plt.close()
         test_results = patch_architecture_dense.evaluate(X_test, y_test)
         print(f'Test Accuracy: {test_results[1]}')
         print(f'Test Loss: {test_results[0]}')
@@ -618,25 +630,26 @@ def main():
 
     if not exists(f'patch_ResNet152_{append_name}_patch.h5'):
         print('Train ResNet')
+        plt.figure(figsize=(15, 8))
         previous_val_acc = 0
         patch_architecture_res = create_patch_model_res((int(WINDOW_SIZE/2),int(WINDOW_SIZE/2),3))
         for i in range(1):
-            history = patch_architecture_res.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping],
+            history = patch_architecture_res.fit(X_train, y_train, epochs=100, batch_size=64,callbacks=[early_stopping,lr_scheduler],
                                             validation_data=(x_val, y_val), verbose=1)
 
             plt.subplot(1, 2, 1)  # 1 row, 2 columns, 1st subplot
-            plt.plot(history.history['accuracy'], label=f'Training Accuracy ({i}th iteration)')
-            plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy ({i}th iteration)')
+            plt.plot(history.history['accuracy'], label=f'Training Accuracy')
+            plt.plot(history.history['val_accuracy'], label=f'Validation Accuracy')
             #plt.plot(history.history['val_f1_score'], label=f'Validation F1 Score ({i}th iteration)')
-            plt.title(f'ResNet152 Baseline Model Accuracy History {append_name} Patches')
+            plt.title(f'ResNet152 Accuracy {append_name} Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Accuracy')
             plt.legend()
 
             plt.subplot(1, 2, 2)  # 1 row, 2 columns, 2nd subplot
-            plt.plot(history.history['loss'], label=f'Training Loss ({i} iteration)')
-            plt.plot(history.history['val_loss'], label=f'Validation Loss ({i} iteration)')
-            plt.title(f'ResNet152 Baseline Model Loss History {append_name} Patches')
+            plt.plot(history.history['loss'], label=f'Training Loss')
+            plt.plot(history.history['val_loss'], label=f'Validation Loss')
+            plt.title(f'ResNet152 Loss {append_name} Patches')
             plt.xlabel('Epoch')
             plt.ylabel('Loss')
             plt.legend()
@@ -646,6 +659,7 @@ def main():
 
         plt.tight_layout()  # Adjust subplot spacing for better appearance
         plt.savefig(f'training_accuracy_loss_ResNet152_{append_name}_patches.png', dpi=400)
+        plt.close()
         test_results = patch_architecture_res.evaluate(X_test, y_test)
         with open(f'test_results_res_{append_name}.txt', 'w') as file:
             file.write(f'Test Accuracy: {test_results[1]}\n')
