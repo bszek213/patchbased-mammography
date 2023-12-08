@@ -1,0 +1,5 @@
+Mean = 124.39453872087353
+
+1st iteration (50%) = 181
+1st iteration (30%) = 160
+1st iteration (10%) = 136
