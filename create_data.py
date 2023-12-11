@@ -27,14 +27,14 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 #     NUM_IMAGES = 2
 #     append_name = 'large'
 
-SMALL_CUTOFF_AREA = 0.0015709008023612142
-MEDIUM_CUTOFF_AREA = 0.006415104487709461
-LARGE_CUTOFF_AREA = 0.024312397807567797
+SMALL_CUTOFF_AREA = 0.0015709008023612142 #0.0010151872005197758 #what bebis wants, 0.0015709008023612142 #what the average is
+MEDIUM_CUTOFF_AREA = 0.004060748802079103 #what bebis wants, what the ae0.006415104487709461
+LARGE_CUTOFF_AREA = 0.02431239780756779
 NUM_IMAGES = 5
 
 #Based on average size - converted to pixels
-SMALL_PATCH = 124
-MEDIUM_PATCH = 250
+SMALL_PATCH = 80 #bebis wants this to be 60x60 or 80x80 was 124
+MEDIUM_PATCH = 200 #bebsis wants to be 200x200 was 250
 LARGE_PATCH = 490
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
@@ -194,7 +194,7 @@ def get_area(image_shape,list_mass):
     return image_area
 
 def get_small_patches(image,list_mass):
-    for i, col in zip([1,1.5,2,2.5,3,4,5],['y','b','g','pink','snow','aqua','orange']):
+    for i, col in zip([1,1.5,2,2.5,3],['y','b','g','pink','snow']):
         patch_size = int(SMALL_PATCH * float(i))
         list_mass = [int(x) for x in list_mass]
         xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
@@ -205,7 +205,6 @@ def get_small_patches(image,list_mass):
         variation = 5 #pixel variability
         center_x = center_x + uniform(-variation, variation)
         center_y = center_y + uniform(-variation, variation)
-
 
         xmin_new, xmax_new = center_x - patch_size, center_x + patch_size
         ymin_new, ymax_new = center_y - patch_size, center_y + patch_size
@@ -226,7 +225,9 @@ def get_small_patches(image,list_mass):
         plt.tight_layout()
         plt.title(f'small window')
         plt.legend()
+    plt.savefig('ranges_boundary_small_lesion.png',dpi=400)
     plt.show()
+    plt.close()
 
 def random_patch_abnormal(image,list_mass):
     """
@@ -325,7 +326,7 @@ def random_patch_normal(image,list_mass):
     shape_patches = np.shape(patches)
     xmin, xmax, ymin, ymax = list_mass[0], list_mass[1], list_mass[2], list_mass[3]
     valid_patches = []
-    for i in range(shape_patches[0]): #iterates over 
+    for i in range(shape_patches[0]): #iter250ates over 
         y_pix_curr = i * window_size
         x_pix_curr = 0
         for j in range(shape_patches[1]): #iterates over x
@@ -431,26 +432,52 @@ def main():
     selected_arrays_non_lesion = []
     all_images = 0
     # combined_array = np.empty((0, WINDOW_SIZE, WINDOW_SIZE, 3), dtype=np.uint8)
+    save_small, save_medium, save_large = [], [], []
     for iteration, (index, row) in enumerate(df.iterrows()):
-            image_type = row['image_id'] + '.dicom'
-            dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
-            if os.path.exists(dicom_path):
-                png_file = convert_dicom_to_png(dicom_path)
-                #abnormal images
-                annotations = row['finding_categories']
-                if row['breast_birads'] > 1 and "Mass" in annotations:
-                    clahe_image = clahe(png_file)
-                    list_all_values = get_lesion_size([row['xmin'],row['xmax'],row['ymin'],row['ymax']],
-                                                        list_all_values,clahe_image.shape)
-                    
-            #         all_images += 1
-            print(f'percent finished: {(iteration / len(df))*100}')
-    #             # for ind_image in clahe_image:
-                    
-                    # lesion_images = random_patch_abnormal(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
-                        #small lesions
-                    # if get_area(clahe_image.shape,[row['xmin'],row['xmax'],row['ymin'],row['ymax']]) <= SMALL_CUTOFF_AREA:
-                    #     get_small_patches(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+        image_type = row['image_id'] + '.dicom'
+        dicom_path = os.path.join(glob_dir,row['study_id'],image_type)
+        if os.path.exists(dicom_path):
+            png_file = convert_dicom_to_png(dicom_path)
+            #abnormal images
+            annotations = row['finding_categories']
+            if row['breast_birads'] > 1 and "Mass" in annotations:
+                clahe_image = clahe(png_file)
+                # list_all_values = get_lesion_size([row['xmin'],row['xmax'],row['ymin'],row['ymax']],
+                #                                     list_all_values,clahe_image.shape)
+                
+                # all_images += 1
+#             # for ind_image in clahe_image:
+                # lesion_images = random_patch_abnormal(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                #small lesions
+                if get_area(clahe_image.shape,[row['xmin'],row['xmax'],row['ymin'],row['ymax']]) <= SMALL_CUTOFF_AREA:
+                    # get_small_patches(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
+                    save_small.append(clahe_image)
+                if (get_area(clahe_image.shape,[row['xmin'],row['xmax'],row['ymin'],row['ymax']]) > SMALL_CUTOFF_AREA and 
+                    get_area(clahe_image.shape,[row['xmin'],row['xmax'],row['ymin'],row['ymax']]) < LARGE_CUTOFF_AREA
+                    ):
+                    save_medium.append(clahe_image)
+                if get_area(clahe_image.shape,[row['xmin'],row['xmax'],row['ymin'],row['ymax']]) >= LARGE_CUTOFF_AREA:
+                    save_large.append(clahe_image)
+        print(f'percent finished: {(iteration / len(df))*100}')
+
+    #save data to .npy
+    save_np_small = np.array(save_small)
+    save_np_medium = np.array(save_medium)
+    save_np_large = np.array(save_large)
+    np.save(f'whole_small_images.npy', save_np_small)
+    np.save(f'whole_medium_images.npy', save_np_medium)
+    np.save(f'whole_large_images.npy', save_np_large)
+    print(save_np_small.shape)
+    print(save_np_medium.shape)
+    print(save_np_large.shape)
+
+
+
+
+
+
+
+
                         # lesion_images = random_patch_abnormal(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
                         # non_lesion_images = random_patch_normal(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
                     # if lesion_images.shape[0] > 0:
@@ -517,7 +544,7 @@ def main():
     # cutoff_small = np.percentile(list_all_values, 25)
     # cutoff_medium = np.percentile(list_all_values, 50)
     # cutoff_large = np.percentile(list_all_values, 75)
-    create_small_medium_large(list_all_values)
+    # create_small_medium_large(list_all_values)
     # plt.figure()
     # hist, bins, _ = plt.hist(np.array(list_all_values).flatten(), bins='auto', color='tab:blue', density=True, alpha=1, label='Data')
     # # plt.fill_betweenx(y=[0, max_density], x1=0, x2=cutoff_small, color='tab:red', alpha=0.5, label='Small')
