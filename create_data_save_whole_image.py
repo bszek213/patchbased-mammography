@@ -4,9 +4,9 @@ from pandas import read_csv
 import pydicom
 import cv2
 
-SMALL_CUTOFF_AREA = 0.0015709008023612142 #0.0010151872005197758 #what bebis wants, 0.0015709008023612142 #what the average is
+SMALL_CUTOFF_AREA = 0.0019489851662238661 #0.0010151872005197758 #what bebis wants, 0.0015709008023612142 #what the average is
 MEDIUM_CUTOFF_AREA = 0.004060748802079103 #what bebis wants, what the ae0.006415104487709461
-LARGE_CUTOFF_AREA = 0.02431239780756779
+LARGE_CUTOFF_AREA = 0.013025605352089967
 NUM_IMAGES = 5
 
 def read_df(path="/media/brianszekely/TOSHIBA EXT/mammogram_images/vindr-mammo-a-large-scale-benchmark-dataset-for-computer-aided-detection-and-diagnosis-in-full-field-digital-mammography-1.0.0"):
@@ -183,11 +183,9 @@ save_np_small = np.array(save_small)
 save_np_medium = np.array(save_medium)
 save_np_large = np.array(save_large)
 
-print(save_small_annotation)
 save_small_annotation = np.array(save_small_annotation)
 save_medium_annotation = np.array(save_medium_annotation)
 save_large_annotation = np.array(save_large_annotation)
-print(save_small_annotation)
 
 if not os.path.exists('data'):
     os.mkdir('data')

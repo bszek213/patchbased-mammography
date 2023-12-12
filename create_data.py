@@ -473,11 +473,6 @@ def main():
 
 
 
-
-
-
-
-
                         # lesion_images = random_patch_abnormal(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
                         # non_lesion_images = random_patch_normal(clahe_image,[row['xmin'],row['xmax'],row['ymin'],row['ymax']])
                     # if lesion_images.shape[0] > 0:
