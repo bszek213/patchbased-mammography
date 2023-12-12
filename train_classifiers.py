@@ -58,11 +58,11 @@ def create_patch_model_dense(input_shape):
     return model
 
 def schedule(epoch, lr):
-    if epoch < 5:
-        return 0.001
-    else:
-        return 0.001 * np.exp(0.1 * (10 - epoch))
-    
+    return 0.0001 * np.exp(0.1 * abs(10 - epoch))
+
+def exponential_decay_schedule(epoch, initial_learning_rate):
+    return initial_learning_rate * np.exp(-0.9 * epoch) #the closer -0.9 is to zero the learning rate will be get very small quickly
+
 def main():
     type_patch_total = ['small']
     multiplication_values = ['1','1-25','1-50','1-75','2','2-25']
