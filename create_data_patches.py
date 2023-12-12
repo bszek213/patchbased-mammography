@@ -230,6 +230,7 @@ def main():
     print(final_train_images.shape)
     print(final_valid_images.shape)
     print(final_test_images.shape)
+
     labels_train = to_categorical(np.array(patch_aug_train_label), 
                                             num_classes=2, dtype="int")
     labels_valid = to_categorical(np.array(patch_aug_valid_label), 
@@ -241,8 +242,8 @@ def main():
     #save features
     multiply = str(multiply).replace(".", "-")
     np.save(os.path.join('data_patch', f'{type_patch}_patches_{str(multiply)}_train.npy'), final_train_images)
-    np.save(os.path.join('data_patch', f'{type_patch}_patches_{str(multiply)}_valid.npy'), final_train_images)
-    np.save(os.path.join('data_patch', f'{type_patch}_patches_{str(multiply)}_test.npy'), final_train_images)
+    np.save(os.path.join('data_patch', f'{type_patch}_patches_{str(multiply)}_valid.npy'), final_valid_images)
+    np.save(os.path.join('data_patch', f'{type_patch}_patches_{str(multiply)}_test.npy'), final_test_images)
 
     #save_labels
     np.save(os.path.join('data_patch', f'{type_patch}_patches_train_{str(multiply)}_label.npy'), labels_train)
