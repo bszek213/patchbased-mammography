@@ -61,13 +61,13 @@ def schedule(epoch, lr):
     return 0.0001 * np.exp(0.1 * abs(10 - epoch))
 
 def exponential_decay_schedule(epoch, initial_learning_rate):
-    return initial_learning_rate * np.exp(-0.9 * epoch) #the closer -0.9 is to zero the learning rate will be get very small quickly
+    return 0.0001 * np.exp(-0.9 * epoch) #the closer -0.9 is to zero the learning rate will be get very small quickly
 
 def main():
     type_patch_total = ['small']
     multiplication_values = ['1','1-25','1-50','1-75','2','2-25']
 
-    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
     lr_scheduler = LearningRateScheduler(schedule)
 
     for type_patch in type_patch_total:
