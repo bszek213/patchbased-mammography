@@ -156,7 +156,7 @@ def main():
 
     #train medium and large
     type_patch_total = ['medium', 'large']
-    multiplication_values = ['1']
+    multiplication_values = ['1','1-25']
     for type_patch in type_patch_total:
         for multiply in multiplication_values:
             print(f'current experiment: {type_patch} / {multiply}')
