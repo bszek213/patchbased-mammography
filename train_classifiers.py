@@ -72,7 +72,7 @@ def main():
 
     for type_patch in type_patch_total:
         for multiply in multiplication_values:
-            print(f'current experiment: {type_patch_total} / {multiplication_values}')
+            print(f'current experiment: {type_patch} / {multiply}')
             X_train = np.load(os.path.join(os.getcwd(),'data_patch', f'{type_patch}_patches_{str(multiply)}_train.npy'))
             x_val = np.load(os.path.join(os.getcwd(),'data_patch', f'{type_patch}_patches_{str(multiply)}_valid.npy'))
             X_test = np.load(os.path.join(os.getcwd(),'data_patch', f'{type_patch}_patches_{str(multiply)}_test.npy'))
@@ -159,7 +159,7 @@ def main():
     multiplication_values = ['1']
     for type_patch in type_patch_total:
         for multiply in multiplication_values:
-            print(f'current experiment: {type_patch_total} / {multiplication_values}')
+            print(f'current experiment: {type_patch} / {multiply}')
             X_train = np.load(os.path.join(os.getcwd(),'data_patch', f'{type_patch}_patches_{str(multiply)}_train.npy'))
             x_val = np.load(os.path.join(os.getcwd(),'data_patch', f'{type_patch}_patches_{str(multiply)}_valid.npy'))
             X_test = np.load(os.path.join(os.getcwd(),'data_patch', f'{type_patch}_patches_{str(multiply)}_test.npy'))
